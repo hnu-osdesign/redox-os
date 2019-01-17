@@ -3,7 +3,10 @@ use std::fs;
 use std::io::{Error, Write};
 use std::path::Path;
 use std::collections::HashMap;
+use rustc_cfg::Cfg;
 
+extern crate cc;
+extern crate rustc_cfg;
 
 // View loc folder with subfolders, get listings
 // Returns touple (folder_map, file_list)
@@ -117,4 +120,12 @@ mod gen {
     }
 }
 ").unwrap();
+
+    // Build pre kstart init asm code for aarch64
+    let cfg = Cfg::new(env::var_os("TARGET").unwrap()).unwrap();
+    if cfg.target_arch == "aarch64" {
+        cc::Build::new()
+            .file("src/arch/aarch64/init/pre_kstart/early_init.S")
+            .compile("early_init");
+    }
 }

@@ -36,3 +36,11 @@ pub unsafe extern fn kstart_ap(args_ptr: *const KernelArgsAp) -> ! {
 pub unsafe fn usermode(ip: usize, sp: usize, arg: usize) -> ! {
     loop {}
 }
+
+#[no_mangle]
+pub fn do_irq() {
+}
+
+#[no_mangle]
+pub fn do_syscall() {
+}

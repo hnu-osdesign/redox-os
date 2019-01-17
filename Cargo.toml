@@ -34,6 +34,10 @@ fdt = { git = "https://gitlab.redox-os.org/thomhuds/fdt.git", default-features =
 x86 = { version = "0.9.0", default-features = false }
 raw-cpuid = "4.0.0"
 
+[build-dependencies]
+cc = "1.0.3"
+rustc-cfg = "0.3.0"
+
 [features]
 default = []
 acpi = []
