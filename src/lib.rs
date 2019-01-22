@@ -34,6 +34,8 @@ extern crate alloc;
 
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate bitfield;
 extern crate goblin;
 extern crate linked_list_allocator;
 extern crate rustc_demangle;
