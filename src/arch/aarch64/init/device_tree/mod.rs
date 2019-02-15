@@ -40,7 +40,10 @@ fn memory_ranges(dt: &fdt::DeviceTree, address_cells: usize, size_cells: usize, 
     index
 }
 
-fn diag_uart_range<'a>(dt: &fdt::DeviceTree<'a>) -> Option<(usize, usize)> {
+pub fn diag_uart_range(dtb_base: usize, dtb_size: usize) -> Option<(usize, usize)> {
+    let data = unsafe { slice::from_raw_parts(dtb_base as *const u8, dtb_size) };
+    let dt = fdt::DeviceTree::new(data).unwrap();
+
     let chosen_node = dt.find_node("/chosen").unwrap();
     let stdout_path = chosen_node.properties().find(|p| p.name.contains("stdout-path")).unwrap();
     let uart_node_name = core::str::from_utf8(stdout_path.data).unwrap()
