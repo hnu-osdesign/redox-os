@@ -33,6 +33,7 @@ __vec_03:
 
     .align 7
 __vec_04:
+    b       report_exception
     wfi
     b __vec_04
 
