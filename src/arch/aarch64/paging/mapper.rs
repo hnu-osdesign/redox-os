@@ -68,6 +68,11 @@ pub struct Mapper {
     p4: Unique<Table<Level4>>,
 }
 
+pub enum MapperType {
+    User,
+    Kernel
+}
+
 impl Mapper {
     /// Create a new page table
     pub unsafe fn new() -> Mapper {
