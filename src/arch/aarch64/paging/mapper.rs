@@ -66,6 +66,7 @@ impl Drop for MapperFlushAll {
 
 pub struct Mapper {
     p4: Unique<Table<Level4>>,
+    pub mapper_type: MapperType
 }
 
 pub enum MapperType {
@@ -75,9 +76,10 @@ pub enum MapperType {
 
 impl Mapper {
     /// Create a new page table
-    pub unsafe fn new() -> Mapper {
-        Mapper {
-            p4: Unique::new_unchecked(table::P4),
+    pub unsafe fn new(mapper_type: MapperType) -> Mapper {
+        match mapper_type {
+            MapperType::User => Mapper { p4: Unique::new_unchecked(table::U4), mapper_type },
+            MapperType::Kernel => Mapper { p4: Unique::new_unchecked(table::P4), mapper_type }
         }
     }
 
