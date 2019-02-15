@@ -82,12 +82,14 @@ impl Scheme for DebugScheme {
             *handles.get(&id).ok_or(Error::new(EBADF))?
         };
 
-        let mut com = COM1.lock();
-        for &byte in buffer.iter() {
-            com.send(byte);
+        if let Some(ref mut serial_port) = *COM1.lock() {
+            for &byte in buffer.iter() {
+                serial_port.send(byte);
+            }
+            Ok(buffer.len())
+        } else {
+            Err(Error::new(EINVAL))
         }
-
-        Ok(buffer.len())
     }
 
     fn fcntl(&self, id: usize, cmd: usize, arg: usize) -> Result<usize> {
