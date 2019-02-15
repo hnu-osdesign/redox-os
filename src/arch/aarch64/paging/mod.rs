@@ -3,10 +3,11 @@
 
 use core::{mem, ptr};
 use core::ops::{Deref, DerefMut};
+use device::cpu::registers::{control_regs, tlb};
 
 use memory::{allocate_frames, Frame};
 
-use self::entry::EntryFlags;
+use self::entry::{EntryFlags, TableDescriptorFlags};
 use self::mapper::Mapper;
 use self::temporary_page::TemporaryPage;
 
@@ -21,15 +22,55 @@ pub const ENTRY_COUNT: usize = 512;
 /// Size of pages
 pub const PAGE_SIZE: usize = 4096;
 
+/// Setup Memory Access Indirection Register
+unsafe fn init_mair() {
+    let mut val: control_regs::MairEl1 = control_regs::mair_el1();
+
+    val.insert(control_regs::MairEl1::DEVICE_MEMORY);
+    val.insert(control_regs::MairEl1::NORMAL_UNCACHED_MEMORY);
+    val.insert(control_regs::MairEl1::NORMAL_WRITEBACK_MEMORY);
+
+    control_regs::mair_el1_write(val);
+}
+
 /// Copy tdata, clear tbss, set TCB self pointer
 unsafe fn init_tcb(cpu_id: usize) -> usize {
-    0
+    extern {
+        /// The starting byte of the thread data segment
+        static mut __tdata_start: u8;
+        /// The ending byte of the thread data segment
+        static mut __tdata_end: u8;
+        /// The starting byte of the thread BSS segment
+        static mut __tbss_start: u8;
+        /// The ending byte of the thread BSS segment
+        static mut __tbss_end: u8;
+    }
+
+    let tcb_offset;
+    {
+        let size = & __tbss_end as *const _ as usize - & __tdata_start as *const _ as usize;
+        let tbss_offset = & __tbss_start as *const _ as usize - & __tdata_start as *const _ as usize;
+
+        let start = ::KERNEL_PERCPU_OFFSET + ::KERNEL_PERCPU_SIZE * cpu_id;
+        // FIXME: Empirically initializing tpidr to 16 bytes below start works. I do not know
+        // whether this is the correct way to handle TLS. Will need to revisit.
+        control_regs::tpidr_el1_write((start - 0x10) as u64);
+
+        let end = start + size;
+        tcb_offset = end - mem::size_of::<usize>();
+
+        ptr::copy(& __tdata_start as *const u8, start as *mut u8, tbss_offset);
+        ptr::write_bytes((start + tbss_offset) as *mut u8, 0, size - tbss_offset);
+
+        *(tcb_offset as *mut usize) = end;
+    }
+    tcb_offset
 }
 
 /// Initialize paging
 ///
 /// Returns page table and thread control block offset
-pub unsafe fn init(cpu_id: usize, kernel_start: usize, kernel_end: usize, stack_start: usize, stack_end: usize) -> (ActivePageTable, usize) {
+pub unsafe fn init(cpu_id: usize, kernel_start: usize, kernel_end: usize, stack_start: usize, stack_end: usize, dtb_start: usize, dtb_end: usize) -> (ActivePageTable, usize) {
     extern {
         /// The starting byte of the text (code) data segment.
         static mut __text_start: u8;
@@ -57,7 +98,106 @@ pub unsafe fn init(cpu_id: usize, kernel_start: usize, kernel_end: usize, stack_
         static mut __bss_end: u8;
     }
 
-    (ActivePageTable::new(), 0)
+    init_mair();
+
+    let mut active_ktable = ActivePageTable::new(PageTableType::Kernel);
+    let mut temporary_kpage = TemporaryPage::new(Page::containing_address(VirtualAddress::new(::KERNEL_TMP_MISC_OFFSET)));
+
+    let mut new_ktable = {
+        let frame = allocate_frames(1).expect("no more frames in paging::init new_table");
+        InactivePageTable::new(frame, &mut active_ktable, &mut temporary_kpage)
+    };
+
+    active_ktable.with(&mut new_ktable, &mut temporary_kpage, |mapper| {
+        // Remap stack writable, no execute
+        {
+            let start_frame = Frame::containing_address(PhysicalAddress::new(stack_start + kernel_start - ::KERNEL_OFFSET));
+            let end_frame = Frame::containing_address(PhysicalAddress::new(stack_end + kernel_start - ::KERNEL_OFFSET - 1));
+            for frame in Frame::range_inclusive(start_frame, end_frame) {
+                let page = Page::containing_address(VirtualAddress::new(frame.start_address().get() - kernel_start + ::KERNEL_OFFSET));
+                let result = mapper.map_to(page, frame, EntryFlags::PRESENT | EntryFlags::GLOBAL | EntryFlags::NO_EXECUTE | EntryFlags::WRITABLE);
+                // The flush can be ignored as this is not the active table. See later active_ktable.switch
+                result.ignore();
+            }
+        }
+
+        // Map all frames in kernel
+        {
+            let start_frame = Frame::containing_address(PhysicalAddress::new(kernel_start));
+            let end_frame = Frame::containing_address(PhysicalAddress::new(kernel_end - 1));
+            let mut index: usize = 0;
+            for frame in Frame::range_inclusive(start_frame, end_frame) {
+                let _phys_addr = frame.start_address().get();
+                let virt_addr = (PAGE_SIZE * index) + ::KERNEL_OFFSET;
+                index += 1;
+
+                macro_rules! in_section {
+                    ($n: ident) => (
+                        virt_addr >= & concat_idents!(__, $n, _start) as *const u8 as usize &&
+                        virt_addr < & concat_idents!(__, $n, _end) as *const u8 as usize
+                    );
+                }
+
+                let flags = if in_section!(text) {
+                    // Remap text read-only
+                    EntryFlags::PRESENT | EntryFlags::GLOBAL
+                } else if in_section!(rodata) {
+                    // Remap rodata read-only, no execute
+                    EntryFlags::PRESENT | EntryFlags::GLOBAL | EntryFlags::NO_EXECUTE
+                } else if in_section!(data) {
+                    // Remap data writable, no execute
+                    EntryFlags::PRESENT | EntryFlags::GLOBAL | EntryFlags::NO_EXECUTE | EntryFlags::WRITABLE
+                } else if in_section!(tdata) {
+                    // Remap tdata master read-only, no execute
+                    EntryFlags::PRESENT | EntryFlags::GLOBAL | EntryFlags::NO_EXECUTE
+                } else if in_section!(bss) {
+                    // Remap bss writable, no execute
+                    EntryFlags::PRESENT | EntryFlags::GLOBAL | EntryFlags::NO_EXECUTE | EntryFlags::WRITABLE
+                } else {
+                    // Remap anything else read-only, no execute
+                    EntryFlags::PRESENT | EntryFlags::GLOBAL | EntryFlags::NO_EXECUTE
+                };
+
+                let page = Page::containing_address(VirtualAddress::new(virt_addr));
+                let result = mapper.map_to(page, frame, flags);
+                // The flush can be ignored as this is not the active table. See later active_ktable.switch
+                result.ignore();
+            }
+        }
+
+        // Map in Device Tree blob
+        {
+            let start_frame = Frame::containing_address(PhysicalAddress::new(dtb_start));
+            let end_frame = Frame::containing_address(PhysicalAddress::new(dtb_start + ::KERNEL_DTB_MAX_SIZE));
+            for (index, frame) in Frame::range_inclusive(start_frame, end_frame).enumerate() {
+                let page = Page::containing_address(VirtualAddress::new(::KERNEL_DTB_OFFSET + (index * ::PAGE_SIZE)));
+                let result = mapper.map_to(page, frame, EntryFlags::PRESENT | EntryFlags::NO_EXECUTE);
+                result.ignore();
+            }
+        }
+
+        // Map tdata and tbss
+        {
+            let size = & __tbss_end as *const _ as usize - & __tdata_start as *const _ as usize;
+
+            let start = ::KERNEL_PERCPU_OFFSET + ::KERNEL_PERCPU_SIZE * cpu_id;
+            let end = start + size;
+
+            let start_page = Page::containing_address(VirtualAddress::new(start));
+            let end_page = Page::containing_address(VirtualAddress::new(end - 1));
+            for page in Page::range_inclusive(start_page, end_page) {
+                let result = mapper.map(page, EntryFlags::PRESENT | EntryFlags::GLOBAL | EntryFlags::NO_EXECUTE | EntryFlags::WRITABLE);
+                // The flush can be ignored as this is not the active table. See later active_table.switch
+                result.ignore();
+            }
+        }
+    });
+
+    // This switches the active table, which is setup by the bootloader, to a correct table
+    // setup by the lambda above. This will also flush the TLB.
+    active_ktable.switch(new_ktable);
+
+    (active_ktable, init_tcb(cpu_id))
 }
 
 pub unsafe fn init_ap(cpu_id: usize, bsp_table: usize, stack_start: usize, stack_end: usize) -> usize {
@@ -71,7 +211,54 @@ pub unsafe fn init_ap(cpu_id: usize, bsp_table: usize, stack_start: usize, stack
         /// The ending byte of the thread BSS segment
         static mut __tbss_end: u8;
     }
-    0
+
+    init_mair();
+
+    let mut active_ktable = ActivePageTable::new(PageTableType::Kernel);
+
+    let mut new_table = InactivePageTable::from_address(bsp_table);
+
+    let mut temporary_kpage = TemporaryPage::new(Page::containing_address(VirtualAddress::new(::USER_TMP_MISC_OFFSET)));
+
+    active_ktable.with(&mut new_table, &mut temporary_kpage, |mapper| {
+        // Map tdata and tbss
+        {
+            let size = & __tbss_end as *const _ as usize - & __tdata_start as *const _ as usize;
+
+            let start = ::KERNEL_PERCPU_OFFSET + ::KERNEL_PERCPU_SIZE * cpu_id;
+            let end = start + size;
+
+            let start_page = Page::containing_address(VirtualAddress::new(start));
+            let end_page = Page::containing_address(VirtualAddress::new(end - 1));
+            for page in Page::range_inclusive(start_page, end_page) {
+                let result = mapper.map(page, EntryFlags::PRESENT);
+                // The flush can be ignored as this is not the active table. See later active_ktable.switch
+                result.ignore();
+            }
+        }
+
+        let mut remap = |start: usize, end: usize, flags: EntryFlags| {
+            if end > start {
+                let start_frame = Frame::containing_address(PhysicalAddress::new(start));
+                let end_frame = Frame::containing_address(PhysicalAddress::new(end - 1));
+                for frame in Frame::range_inclusive(start_frame, end_frame) {
+                    let page = Page::containing_address(VirtualAddress::new(frame.start_address().get() + ::KERNEL_OFFSET));
+                    let result = mapper.map_to(page, frame, flags);
+                    // The flush can be ignored as this is not the active table. See later active_ktable.switch
+                    result.ignore();
+                }
+            }
+        };
+
+        // Remap stack writable, no execute
+        remap(stack_start - ::KERNEL_OFFSET, stack_end - ::KERNEL_OFFSET, EntryFlags::PRESENT | EntryFlags::GLOBAL | EntryFlags::NO_EXECUTE);
+    });
+
+    // This switches the active table, which is setup by the bootloader, to a correct table
+    // setup by the lambda above. This will also flush the TLB
+    active_ktable.switch(new_table);
+
+    init_tcb(cpu_id)
 }
 
 pub struct ActivePageTable {
@@ -98,34 +285,79 @@ impl DerefMut for ActivePageTable {
 }
 
 impl ActivePageTable {
-    pub unsafe fn new() -> ActivePageTable {
-        ActivePageTable {
-            mapper: Mapper::new(),
+    pub unsafe fn new(table_type: PageTableType) -> ActivePageTable {
+        use self::mapper::MapperType;
+        match table_type {
+            PageTableType::User => ActivePageTable { mapper: Mapper::new(MapperType::User) },
+            PageTableType::Kernel => ActivePageTable { mapper: Mapper::new(MapperType::Kernel)}
         }
     }
 
     pub fn switch(&mut self, new_table: InactivePageTable) -> InactivePageTable {
-        let old_table = InactivePageTable {
-            p4_frame: Frame::containing_address(
-                          PhysicalAddress::new(0)
-                          ),
-        };
+        use super::paging::mapper::{MapperType};
+
+        let old_table: InactivePageTable;
+
+        match self.mapper.mapper_type {
+            MapperType::User => {
+                old_table = InactivePageTable { p4_frame: Frame::containing_address(PhysicalAddress::new(unsafe { control_regs::ttbr0_el1() } as usize)) };
+                unsafe { control_regs::ttbr0_el1_write(new_table.p4_frame.start_address().get() as u64) };
+            },
+            MapperType::Kernel =>  {
+                old_table = InactivePageTable { p4_frame: Frame::containing_address(PhysicalAddress::new(unsafe { control_regs::ttbr1_el1() } as usize)) };
+                unsafe { control_regs::ttbr1_el1_write(new_table.p4_frame.start_address().get() as u64) };
+            }
+        }
+
+        unsafe { tlb::flush_all() };
         old_table
     }
 
     pub fn flush(&mut self, page: Page) {
+        unsafe { tlb::flush(page.start_address().get()); }
     }
 
     pub fn flush_all(&mut self) {
+        unsafe { tlb::flush_all(); }
     }
 
     pub fn with<F>(&mut self, table: &mut InactivePageTable, temporary_page: &mut TemporaryPage, f: F)
         where F: FnOnce(&mut Mapper)
     {
+        {
+            let backup: Frame;
+            use self::mapper::{MapperType};
+
+            match self.mapper.mapper_type {
+                MapperType::User => backup = Frame::containing_address(PhysicalAddress::new(unsafe { control_regs::ttbr0_el1() as usize })),
+                MapperType::Kernel => backup = Frame::containing_address(PhysicalAddress::new(unsafe { control_regs::ttbr1_el1() as usize }))
+            }
+
+            // map temporary_kpage to current p4 table
+            let p4_table = temporary_page.map_table_frame(backup.clone(), EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NO_EXECUTE, self);
+
+            // overwrite recursive mapping
+            self.p4_mut()[::RECURSIVE_PAGE_PML4].page_table_entry_set(table.p4_frame.clone(), TableDescriptorFlags::PRESENT | TableDescriptorFlags::VALID | TableDescriptorFlags::TABLE);
+            self.flush_all();
+
+            // execute f in the new context
+            f(self);
+
+            // restore recursive mapping to original p4 table
+            p4_table[::RECURSIVE_PAGE_PML4].page_table_entry_set(backup, TableDescriptorFlags::PRESENT | TableDescriptorFlags::VALID | TableDescriptorFlags::TABLE);
+
+            self.flush_all();
+        }
+
+        temporary_page.unmap(self);
     }
 
     pub unsafe fn address(&self) -> usize {
-        0
+        use self::mapper::MapperType;
+        match self.mapper.mapper_type {
+            MapperType::User => control_regs::ttbr0_el1() as usize,
+            MapperType::Kernel => control_regs::ttbr1_el1() as usize,
+        }
     }
 }
 
@@ -135,15 +367,24 @@ pub struct InactivePageTable {
 
 impl InactivePageTable {
     pub fn new(frame: Frame, active_table: &mut ActivePageTable, temporary_page: &mut TemporaryPage) -> InactivePageTable {
+        {
+            let table = temporary_page.map_table_frame(frame.clone(), EntryFlags::PRESENT | EntryFlags::WRITABLE | EntryFlags::NO_EXECUTE, active_table);
+            // now we are able to zero the table
+            table.zero();
+            // set up recursive mapping for the table
+            table[::RECURSIVE_PAGE_PML4].page_table_entry_set(frame.clone(), TableDescriptorFlags::PRESENT | TableDescriptorFlags::VALID | TableDescriptorFlags::TABLE);
+        }
+        temporary_page.unmap(active_table);
+
         InactivePageTable { p4_frame: frame }
     }
 
-    pub unsafe fn from_address(cr3: usize) -> InactivePageTable {
-        InactivePageTable { p4_frame: Frame::containing_address(PhysicalAddress::new(cr3)) }
+    pub unsafe fn from_address(ttbr: usize) -> InactivePageTable {
+        InactivePageTable { p4_frame: Frame::containing_address(PhysicalAddress::new(ttbr)) }
     }
 
     pub unsafe fn address(&self) -> usize {
-        0
+        self.p4_frame.start_address().get()
     }
 }
 
@@ -196,26 +437,28 @@ pub struct Page {
 
 impl Page {
     pub fn start_address(&self) -> VirtualAddress {
-        VirtualAddress::new(0)
+        VirtualAddress::new(self.number * PAGE_SIZE)
     }
 
     pub fn p4_index(&self) -> usize {
-        0
+        (self.number >> 27) & 0o777
     }
 
     pub fn p3_index(&self) -> usize {
-        0
+        (self.number >> 18) & 0o777
     }
 
     pub fn p2_index(&self) -> usize {
-        0
+        (self.number >> 9) & 0o777
     }
 
     pub fn p1_index(&self) -> usize {
-        0
+        self.number & 0o777
     }
 
     pub fn containing_address(address: VirtualAddress) -> Page {
+        //TODO assert!(address.get() < 0x0000_8000_0000_0000 || address.get() >= 0xffff_8000_0000_0000,
+        //    "invalid address: 0x{:x}", address.get());
         Page { number: address.get() / PAGE_SIZE }
     }
 

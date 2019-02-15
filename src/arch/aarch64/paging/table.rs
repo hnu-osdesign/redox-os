@@ -6,10 +6,14 @@ use core::ops::{Index, IndexMut};
 
 use memory::allocate_frames;
 
-use super::entry::{EntryFlags, Entry};
+use super::entry::{TableDescriptorFlags, Entry};
 use super::ENTRY_COUNT;
 
-pub const P4: *mut Table<Level4> = (::RECURSIVE_PAGE_OFFSET | 0x7ffffff000) as *mut _;
+pub const P4: *mut Table<Level4> = 0xffff_ffff_ffff_f000 as *mut _;
+pub const U4: *mut Table<Level4> = 0x0000_ffff_ffff_f000 as *mut _;
+
+const KSPACE_ADDR_MASK: usize = 0xffff_0000_0000_0000;
+const USPACE_ADDR_MASK: usize = 0x0000_ffff_ffff_ffff;
 
 pub trait TableLevel {}
 
@@ -60,18 +64,45 @@ impl<L> Table<L> where L: TableLevel {
     }
 
     /// Set number of entries in first table entry
+    /// FIXMES:
+    /// Only 1 bit per table entry seems to work. So we need 9 entries (!).
+    /// This is one reason why we need to have a non-recursive paging scheme.
+    /// These updates require memory barriers and TLB invalidations.
     fn set_entry_count(&mut self, count: u64) {
+        debug_assert!(count <= ENTRY_COUNT as u64, "count can't be greater than ENTRY_COUNT");
+        self.entries[0].set_counter_bits((count >> 0) & 0x1);
+        self.entries[1].set_counter_bits((count >> 1) & 0x1);
+        self.entries[2].set_counter_bits((count >> 2) & 0x1);
+        self.entries[3].set_counter_bits((count >> 3) & 0x1);
+        self.entries[4].set_counter_bits((count >> 4) & 0x1);
+        self.entries[5].set_counter_bits((count >> 5) & 0x1);
+        self.entries[6].set_counter_bits((count >> 6) & 0x1);
+        self.entries[7].set_counter_bits((count >> 7) & 0x1);
+        self.entries[8].set_counter_bits((count >> 8) & 0x1);
     }
 
-    /// Get number of entries in first table entry
+    /// Get number of entries from first table entry
     fn entry_count(&self) -> u64 {
-        0
+        let mut count: u64 = (self.entries[0].counter_bits() & 0x1) << 0;
+        count |= (self.entries[1].counter_bits() & 0x1) << 1;
+        count |= (self.entries[2].counter_bits() & 0x1) << 2;
+        count |= (self.entries[3].counter_bits() & 0x1) << 3;
+        count |= (self.entries[4].counter_bits() & 0x1) << 4;
+        count |= (self.entries[5].counter_bits() & 0x1) << 5;
+        count |= (self.entries[6].counter_bits() & 0x1) << 6;
+        count |= (self.entries[7].counter_bits() & 0x1) << 7;
+        count |= (self.entries[8].counter_bits() & 0x1) << 8;
+        count
     }
 
     pub fn increment_entry_count(&mut self) {
+        let current_count = self.entry_count();
+        self.set_entry_count(current_count + 1);
     }
 
     pub fn decrement_entry_count(&mut self) {
+        let current_count = self.entry_count();
+        self.set_entry_count(current_count - 1);
     }
 }
 
@@ -85,11 +116,33 @@ impl<L> Table<L> where L: HierarchicalLevel {
     }
 
     pub fn next_table_create(&mut self, index: usize) -> &mut Table<L::NextLevel> {
+        if self.next_table(index).is_none() {
+            let frame = allocate_frames(1).expect("no frames available");
+            self.increment_entry_count();
+
+            /* Allow users to go down the page table, implement permissions at the page level */
+            let mut perms = TableDescriptorFlags::PRESENT;
+            perms |= TableDescriptorFlags::VALID;
+            perms |= TableDescriptorFlags::TABLE;
+
+            self[index].page_table_entry_set(frame, perms);
+            self.next_table_mut(index).unwrap().zero();
+        }
         self.next_table_mut(index).unwrap()
     }
 
     fn next_table_address(&self, index: usize) -> Option<usize> {
-        None
+        let entry_flags = self[index].page_table_entry_flags();
+        if entry_flags.contains(TableDescriptorFlags::PRESENT) {
+            let table_address = self as *const _ as usize;
+            if (table_address & KSPACE_ADDR_MASK) != 0 {
+                Some((table_address << 9) | (index << 12))
+            } else {
+                Some(((table_address << 9) | (index << 12)) & USPACE_ADDR_MASK)
+            }
+        } else {
+            None
+        }
     }
 }
 
