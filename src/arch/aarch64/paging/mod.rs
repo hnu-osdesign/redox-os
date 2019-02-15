@@ -78,6 +78,11 @@ pub struct ActivePageTable {
     mapper: Mapper,
 }
 
+pub enum PageTableType {
+    User,
+    Kernel
+}
+
 impl Deref for ActivePageTable {
     type Target = Mapper;
 
