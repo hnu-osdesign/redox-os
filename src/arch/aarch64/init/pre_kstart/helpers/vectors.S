@@ -62,8 +62,8 @@ __vec_08:
     b __vec_08
 
     .align 7
-    mov     x18, #0xb0ba
 __vec_09:
+    b       do_irq                              // First level interrupt handler
     wfi
     b __vec_09
 
