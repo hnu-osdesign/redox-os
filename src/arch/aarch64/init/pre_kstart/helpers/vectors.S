@@ -8,88 +8,93 @@
 exception_vector_base:
 
     .align 7
-    mov     x18, #0xb0b0
 __vec_00:
+    mov     x18, #0xb0b0
     wfi
     b __vec_00
 
     .align 7
-    mov     x18, #0xb0b1
 __vec_01:
+    mov     x18, #0xb0b1
     wfi
     b __vec_01
 
     .align 7
-    mov     x18, #0xb0b2
 __vec_02:
+    mov     x18, #0xb0b2
     wfi
     b __vec_02
 
     .align 7
-    mov     x18, #0xb0b3
 __vec_03:
+    mov     x18, #0xb0b3
     wfi
     b __vec_03
 
     .align 7
-    mov     x18, #0xb0b4
 __vec_04:
     wfi
     b __vec_04
 
     .align 7
+__vec_05:
     b       do_irq                              // First level interrupt handler
+    wfi
+    b __vec_05
 
     .align 7
-    mov     x18, #0xb0b6
 __vec_06:
+    mov     x18, #0xb0b6
     wfi
     b __vec_06
 
     .align 7
-    mov     x18, #0xb0b7
 __vec_07:
+    mov     x18, #0xb0b7
     wfi
     b __vec_07
 
     .align 7
+__vec_08:
     b       do_syscall                          // Syscall handler
+    wfi
+    b __vec_08
 
     .align 7
     mov     x18, #0xb0ba
-__vec_010:
+__vec_09:
     wfi
-    b __vec_010
+    b __vec_09
 
     .align 7
+__vec_10:
     mov     x18, #0xb0bb
-__vec_011:
     wfi
-    b __vec_011
+    b __vec_10
 
     .align 7
+__vec_11:
     mov     x18, #0xb0bc
-__vec_012:
     wfi
-    b __vec_012
+    b __vec_11
 
     .align 7
+__vec_12:
     mov     x18, #0xb0bd
-__vec_013:
     wfi
-    b __vec_013
+    b __vec_12
 
     .align 7
+__vec_13:
     mov     x18, #0xb0be
-__vec_014:
     wfi
-    b __vec_014
+    b __vec_13
 
     .align 7
+__vec_14:
     mov     x18, #0xb0bf
-__vec_015:
     wfi
-    b __vec_015
+    b __vec_14
 
     .align 7
 exception_vector_end:
