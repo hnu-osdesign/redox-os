@@ -27,3 +27,6 @@ pub mod start;
 
 /// Stop function
 pub mod stop;
+
+/// Early init support
+pub mod init;
