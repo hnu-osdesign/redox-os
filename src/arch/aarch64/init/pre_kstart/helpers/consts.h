@@ -2,7 +2,7 @@
 #define BLOCK_SIZE              0x40000000
 #define VIRT_BITS               48
 
-#define DTB_VBASE               0xfffffd0000000000                  // By convention DTBs are mapped here. Must tally with consts.rs.
+#define DTB_VBASE               0xfffffc8000000000                  // By convention DTBs are mapped here. Must tally with consts.rs.
 #define DTB_MAX_SIZE            0x200000
 
 #define ENV_VBASE               0xfffffc0000000000                  // Where the boot environment is setup for the kernel

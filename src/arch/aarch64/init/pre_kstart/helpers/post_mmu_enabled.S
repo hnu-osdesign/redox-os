@@ -25,9 +25,8 @@ setup_kstart_context:
     ldr  x1, =PAGE_SIZE
     str  x1, [x0]
 
-    adr  x0, args.dtb_base                  // Virtual address of DTB Image's base
-    ldr  x1, =DTB_VBASE
-    str  x1, [x0]
+    adr  x0, args.dtb_base                  // Physical address of DTB Image's base
+    str  x19, [x0]
 
     adr  x0, args.dtb_size                  // Size of DTB image
     mov  w1, w21
