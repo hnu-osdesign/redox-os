@@ -12,8 +12,8 @@ use syscall::scheme::Scheme;
 pub static IRQ_SCHEME_ID: AtomicSchemeId = ATOMIC_SCHEMEID_INIT;
 
 /// IRQ queues
-static ACKS: Mutex<[usize; 16]> = Mutex::new([0; 16]);
-static COUNTS: Mutex<[usize; 16]> = Mutex::new([0; 16]);
+static ACKS: Mutex<[usize; 128]> = Mutex::new([0; 128]);
+static COUNTS: Mutex<[usize; 128]> = Mutex::new([0; 128]);
 
 /// Add to the input queue
 #[no_mangle]
