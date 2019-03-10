@@ -14,6 +14,10 @@ pub use self::switch::switch;
 #[path = "arch/x86_64.rs"]
 mod arch;
 
+#[cfg(target_arch = "aarch64")]
+#[path = "arch/aarch64.rs"]
+mod arch;
+
 /// Context struct
 mod context;
 

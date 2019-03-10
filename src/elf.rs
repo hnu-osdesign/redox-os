@@ -10,6 +10,9 @@ pub use goblin::elf32::{header, program_header, section_header, sym};
 #[cfg(target_arch = "x86_64")]
 pub use goblin::elf64::{header, program_header, section_header, sym};
 
+#[cfg(target_arch = "aarch64")]
+pub use goblin::elf64::{header, program_header, section_header, sym};
+
 /// An ELF executable
 pub struct Elf<'a> {
     pub data: &'a [u8],
