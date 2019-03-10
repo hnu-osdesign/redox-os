@@ -2,6 +2,7 @@ use core::sync::atomic::Ordering;
 
 use context::{arch, contexts, Context, Status, CONTEXT_ID};
 use context::signal::signal_handler;
+#[cfg(target_arch = "x86_64")]
 use gdt;
 use interrupt;
 use interrupt::irq::PIT_TICKS;
@@ -22,6 +23,7 @@ unsafe fn update(context: &mut Context, cpu_id: usize) {
         if let Some(ref mut kfx) = context.kfx {
             kfx.clone_from_slice(&ksig.1.expect("context::switch: ksig kfx not set with ksig_restore"));
         } else {
+            #[cfg(target_arch = "x86_64")]
             panic!("context::switch: kfx not set with ksig_restore");
         }
 
@@ -128,6 +130,7 @@ pub unsafe fn switch() -> bool {
         (&mut *from_ptr).running = false;
         (&mut *to_ptr).running = true;
         if let Some(ref stack) = (*to_ptr).kstack {
+            #[cfg(target_arch = "x86_64")]
             gdt::set_tss_stack(stack.as_ptr() as usize + stack.len());
         }
         CONTEXT_ID.store((&mut *to_ptr).id, Ordering::SeqCst);

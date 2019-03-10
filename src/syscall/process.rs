@@ -125,9 +125,14 @@ pub fn clone(flags: usize, stack_base: usize) -> Result<ContextId> {
             }
 
             if let Some(ref stack) = context.kstack {
-                offset = stack_base - stack.as_ptr() as usize - mem::size_of::<usize>(); // Add clone ret
+                #[cfg(target_arch = "x86_64")]
+                {
+                    offset = stack_base - stack.as_ptr() as usize - (1 * mem::size_of::<usize>()); // Add clone ret
+                }
+
                 let mut new_stack = stack.clone();
 
+                #[cfg(target_arch = "x86_64")]
                 unsafe {
                     let func_ptr = new_stack.as_mut_ptr().offset(offset as isize);
                     *(func_ptr as *mut usize) = interrupt::syscall::clone_ret as usize;
@@ -350,32 +355,38 @@ pub fn clone(flags: usize, stack_base: usize) -> Result<ContextId> {
             context.arch.set_page_table(unsafe { new_table.address() });
 
             // Copy kernel image mapping
+            #[cfg(target_arch = "x86_64")]
             {
-                let frame = active_table.p4()[::KERNEL_PML4].pointed_frame().expect("kernel image not mapped");
-                let flags = active_table.p4()[::KERNEL_PML4].flags();
-                active_table.with(&mut new_table, &mut temporary_page, |mapper| {
-                    mapper.p4_mut()[::KERNEL_PML4].set(frame, flags);
-                });
-            }
+                {
+                    let frame = active_table.p4()[::KERNEL_PML4].pointed_frame().expect("kernel image not mapped");
+                    let flags = active_table.p4()[::KERNEL_PML4].flags();
+                    active_table.with(&mut new_table, &mut temporary_page, |mapper| {
+                        mapper.p4_mut()[::KERNEL_PML4].set(frame, flags);
+                    });
+                }
 
-            // Copy kernel heap mapping
-            {
-                let frame = active_table.p4()[::KERNEL_HEAP_PML4].pointed_frame().expect("kernel heap not mapped");
-                let flags = active_table.p4()[::KERNEL_HEAP_PML4].flags();
-                active_table.with(&mut new_table, &mut temporary_page, |mapper| {
-                    mapper.p4_mut()[::KERNEL_HEAP_PML4].set(frame, flags);
-                });
-            }
+                // Copy kernel heap mapping
+                {
+                    let frame = active_table.p4()[::KERNEL_HEAP_PML4].pointed_frame().expect("kernel heap not mapped");
+                    let flags = active_table.p4()[::KERNEL_HEAP_PML4].flags();
+                    active_table.with(&mut new_table, &mut temporary_page, |mapper| {
+                        mapper.p4_mut()[::KERNEL_HEAP_PML4].set(frame, flags);
+                    });
+                }
 
-            if let Some(fx) = kfx_option.take() {
-                context.arch.set_fx(fx.as_ptr() as usize);
-                context.kfx = Some(fx);
+                if let Some(fx) = kfx_option.take() {
+                    context.arch.set_fx(fx.as_ptr() as usize);
+                    context.kfx = Some(fx);
+                }
             }
 
             // Set kernel stack
-            if let Some(stack) = kstack_option.take() {
-                context.arch.set_stack(stack.as_ptr() as usize + offset);
-                context.kstack = Some(stack);
+            #[cfg(target_arch = "x86_64")]
+            {
+                if let Some(stack) = kstack_option.take() {
+                    context.arch.set_stack(stack.as_ptr() as usize + offset);
+                    context.kstack = Some(stack);
+                }
             }
 
             // TODO: Clone ksig?
@@ -412,29 +423,32 @@ pub fn clone(flags: usize, stack_base: usize) -> Result<ContextId> {
                 }
                 context.grants = grants;
             } else {
+                #[cfg(target_arch = "x86_64")]
                 // Copy percpu mapping
-                for cpu_id in 0..::cpu_count() {
-                    extern {
-                        // The starting byte of the thread data segment
-                        static mut __tdata_start: u8;
-                        // The ending byte of the thread BSS segment
-                        static mut __tbss_end: u8;
-                    }
+                {
+                    for cpu_id in 0..::cpu_count() {
+                        extern {
+                            // The starting byte of the thread data segment
+                            static mut __tdata_start: u8;
+                            // The ending byte of the thread BSS segment
+                            static mut __tbss_end: u8;
+                        }
 
-                    let size = unsafe { & __tbss_end as *const _ as usize - & __tdata_start as *const _ as usize };
+                        let size = unsafe { & __tbss_end as *const _ as usize - & __tdata_start as *const _ as usize };
 
-                    let start = ::KERNEL_PERCPU_OFFSET + ::KERNEL_PERCPU_SIZE * cpu_id;
-                    let end = start + size;
+                        let start = ::KERNEL_PERCPU_OFFSET + ::KERNEL_PERCPU_SIZE * cpu_id;
+                        let end = start + size;
 
-                    let start_page = Page::containing_address(VirtualAddress::new(start));
-                    let end_page = Page::containing_address(VirtualAddress::new(end - 1));
-                    for page in Page::range_inclusive(start_page, end_page) {
-                        let frame = active_table.translate_page(page).expect("kernel percpu not mapped");
-                        active_table.with(&mut new_table, &mut temporary_page, |mapper| {
-                            let result = mapper.map_to(page, frame, EntryFlags::PRESENT | EntryFlags::NO_EXECUTE | EntryFlags::WRITABLE);
-                            // Ignore result due to operating on inactive table
-                            unsafe { result.ignore(); }
-                        });
+                        let start_page = Page::containing_address(VirtualAddress::new(start));
+                        let end_page = Page::containing_address(VirtualAddress::new(end - 1));
+                        for page in Page::range_inclusive(start_page, end_page) {
+                            let frame = active_table.translate_page(page).expect("kernel percpu not mapped");
+                            active_table.with(&mut new_table, &mut temporary_page, |mapper| {
+                                let result = mapper.map_to(page, frame, EntryFlags::PRESENT | EntryFlags::NO_EXECUTE | EntryFlags::WRITABLE);
+                                // Ignore result due to operating on inactive table
+                                unsafe { result.ignore(); }
+                            });
+                        }
                     }
                 }
 

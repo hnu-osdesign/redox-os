@@ -10,6 +10,7 @@ pub use self::context::{Context, ContextId, Status, WaitpidKey};
 pub use self::list::ContextList;
 pub use self::switch::switch;
 
+#[cfg(target_arch = "x86_64")]
 #[path = "arch/x86_64.rs"]
 mod arch;
 
