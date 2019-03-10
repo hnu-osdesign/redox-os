@@ -57,9 +57,6 @@ pub mod common;
 pub mod arch;
 pub use arch::*;
 
-/// Constants like memory locations
-pub mod consts;
-
 /// Heap allocators
 pub mod allocator;
 
