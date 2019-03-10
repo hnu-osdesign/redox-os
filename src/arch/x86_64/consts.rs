@@ -7,6 +7,9 @@
     pub const PML4_SIZE: usize = 0x0000_0080_0000_0000;
     pub const PML4_MASK: usize = 0x0000_ff80_0000_0000;
 
+    /// Size of a page and frame
+    pub const PAGE_SIZE: usize = 4096;
+
     /// Offset of recursive paging
     pub const RECURSIVE_PAGE_OFFSET: usize = (-(PML4_SIZE as isize)) as usize;
     pub const RECURSIVE_PAGE_PML4: usize = (RECURSIVE_PAGE_OFFSET & PML4_MASK)/PML4_SIZE;
@@ -18,6 +21,8 @@
     /// Offset to kernel heap
     pub const KERNEL_HEAP_OFFSET: usize = KERNEL_OFFSET - PML4_SIZE;
     pub const KERNEL_HEAP_PML4: usize = (KERNEL_HEAP_OFFSET & PML4_MASK)/PML4_SIZE;
+    /// Kernel stack size - must be kept in sync with early_init.S. Used by memory::init
+    pub const KERNEL_STACK_SIZE: usize = PAGE_SIZE;
     /// Size of kernel heap
     pub const KERNEL_HEAP_SIZE: usize = 1 * 1024 * 1024; // 1 MB
 
