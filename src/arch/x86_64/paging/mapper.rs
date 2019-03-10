@@ -80,9 +80,14 @@ pub struct Mapper {
     p4: Unique<Table<Level4>>,
 }
 
+pub enum MapperType {
+    User,
+    Kernel
+}
+
 impl Mapper {
     /// Create a new page table
-    pub unsafe fn new() -> Mapper {
+    pub unsafe fn new(_mapper_type: MapperType) -> Mapper {
         Mapper {
             p4: Unique::new_unchecked(table::P4),
         }

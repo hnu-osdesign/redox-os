@@ -108,7 +108,7 @@ pub unsafe fn init(cpu_id: usize, kernel_start: usize, kernel_end: usize, stack_
 
     init_pat();
 
-    let mut active_table = ActivePageTable::new();
+    let mut active_table = ActivePageTable::new(PageTableType::Kernel);
 
     let mut temporary_page = TemporaryPage::new(Page::containing_address(VirtualAddress::new(::USER_TMP_MISC_OFFSET)));
 
@@ -210,7 +210,7 @@ pub unsafe fn init_ap(cpu_id: usize, bsp_table: usize, stack_start: usize, stack
 
     init_pat();
 
-    let mut active_table = ActivePageTable::new();
+    let mut active_table = ActivePageTable::new(PageTableType::Kernel);
 
     let mut new_table = InactivePageTable::from_address(bsp_table);
 
@@ -261,6 +261,11 @@ pub struct ActivePageTable {
     mapper: Mapper,
 }
 
+pub enum PageTableType {
+    User,
+    Kernel
+}
+
 impl Deref for ActivePageTable {
     type Target = Mapper;
 
@@ -276,9 +281,11 @@ impl DerefMut for ActivePageTable {
 }
 
 impl ActivePageTable {
-    pub unsafe fn new() -> ActivePageTable {
-        ActivePageTable {
-            mapper: Mapper::new(),
+    pub unsafe fn new(table_type: PageTableType) -> ActivePageTable {
+        use self::mapper::MapperType;
+        match table_type {
+            PageTableType::User => ActivePageTable { mapper: Mapper::new(MapperType::User) },
+            PageTableType::Kernel => ActivePageTable { mapper: Mapper::new(MapperType::Kernel)}
         }
     }
 
@@ -376,6 +383,11 @@ impl PhysicalAddress {
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct VirtualAddress(usize);
 
+pub enum VAddrType {
+    User,
+    Kernel
+}
+
 impl VirtualAddress {
     pub fn new(address: usize) -> Self {
         VirtualAddress(address)
@@ -383,6 +395,14 @@ impl VirtualAddress {
 
     pub fn get(&self) -> usize {
         self.0
+    }
+
+    pub fn get_type(&self) -> VAddrType {
+        if ((self.0 >> 48) & 0xffff) == 0xffff {
+            VAddrType::Kernel
+        } else {
+            VAddrType::User
+        }
     }
 }
 
