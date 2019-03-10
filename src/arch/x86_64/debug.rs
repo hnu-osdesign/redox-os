@@ -9,7 +9,7 @@ use super::device::serial::COM1;
 use super::graphical_debug::{DEBUG_DISPLAY, DebugDisplay};
 
 pub struct Writer<'a> {
-    serial: MutexGuard<'a, SerialPort<Pio<u8>>>,
+    serial: MutexGuard<'a, Option<SerialPort<Pio<u8>>>>,
     #[cfg(feature = "graphical_debug")]
     display: MutexGuard<'a, Option<DebugDisplay>>
 }
@@ -27,7 +27,13 @@ impl<'a> Writer<'a> {
 impl<'a> fmt::Write for Writer<'a> {
     #[cfg(not(feature = "graphical_debug"))]
     fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
-        self.serial.write_str(s)
+        if let Some(ref mut serial_port) = *self.serial {
+            serial_port.write_str(s);
+            Ok(())
+        }
+        else {
+            Err(fmt::Error)
+        }
     }
 
     #[cfg(feature = "graphical_debug")]

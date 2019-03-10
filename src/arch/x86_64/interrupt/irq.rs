@@ -74,12 +74,16 @@ interrupt!(cascade, {
 });
 
 interrupt!(com2, {
-    COM2.lock().receive();
+    if let Some(ref mut serial_port) = *COM2.lock() {
+        serial_port.receive();
+    }
     pic::MASTER.ack();
 });
 
 interrupt!(com1, {
-    COM1.lock().receive();
+    if let Some(ref mut serial_port) = *COM1.lock() {
+        serial_port.receive();
+    }
     pic::MASTER.ack();
 });
 
