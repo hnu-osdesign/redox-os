@@ -1,3 +1,6 @@
+/// Constants like memory locations
+pub mod consts;
+
 #[macro_use]
 pub mod macros;
 
