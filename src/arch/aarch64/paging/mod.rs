@@ -178,6 +178,14 @@ impl VirtualAddress {
     pub fn get(&self) -> usize {
         self.0
     }
+
+    pub fn get_type(&self) -> VAddrType {
+        if ((self.0 >> 48) & 0xffff) == 0xffff {
+            VAddrType::Kernel
+        } else {
+            VAddrType::User
+        }
+    }
 }
 
 /// Page
