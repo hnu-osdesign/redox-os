@@ -70,7 +70,7 @@ static ALLOCATOR: Mutex<Option<RecycleAllocator<BumpAllocator>>> = Mutex::new(No
 
 /// Init memory module
 /// Must be called once, and only once,
-pub unsafe fn init(kernel_start: usize, kernel_end: usize) {
+pub unsafe fn init_x86_64(kernel_start: usize, kernel_end: usize) {
     // Copy memory map from bootloader location
     for (i, entry) in MEMORY_MAP.iter_mut().enumerate() {
         *entry = *(0x500 as *const MemoryArea).offset(i as isize);
@@ -80,6 +80,11 @@ pub unsafe fn init(kernel_start: usize, kernel_end: usize) {
     }
 
     *ALLOCATOR.lock() = Some(RecycleAllocator::new(BumpAllocator::new(kernel_start, kernel_end, MemoryAreaIter::new(MEMORY_AREA_FREE))));
+}
+
+pub unsafe fn init(kernel_start: usize, kernel_end: usize) {
+    #[cfg(target_arch = "x86_64")]
+    init_x86_64(kernel_start, kernel_end);
 }
 
 /// Init memory module after core
