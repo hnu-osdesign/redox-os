@@ -129,6 +129,10 @@ pub fn clone(flags: usize, stack_base: usize) -> Result<ContextId> {
                 {
                     offset = stack_base - stack.as_ptr() as usize - (1 * mem::size_of::<usize>()); // Add clone ret
                 }
+                #[cfg(target_arch = "aarch64")]
+                {
+                    offset = stack_base - stack.as_ptr() as usize;
+                }
 
                 let mut new_stack = stack.clone();
 
@@ -386,6 +390,15 @@ pub fn clone(flags: usize, stack_base: usize) -> Result<ContextId> {
                 if let Some(stack) = kstack_option.take() {
                     context.arch.set_stack(stack.as_ptr() as usize + offset);
                     context.kstack = Some(stack);
+                }
+            }
+            #[cfg(target_arch = "aarch64")]
+            {
+                if let Some(stack) = kstack_option.take() {
+                    context.arch.set_stack(stack.as_ptr() as usize + offset);
+                    context.kstack = Some(stack);
+                    context.arch.set_lr(interrupt::syscall::clone_ret as usize);
+                    context.arch.set_context_handle();
                 }
             }
 
@@ -699,6 +712,18 @@ fn fexec_noreturn(
 
             let mut arg_size = 0;
 
+            #[cfg(target_arch = "aarch64")]
+            {
+                if sp % 16 != 0 {
+                    panic!("fexec_noreturn: at first check: misaligned stack: sp = 0x{:x}", sp);
+                }
+                println!("fexec_noreturn: nvars = {}, nargs = {}", vars.len(), args.len());
+                let num_entries = vars.len() + 1 + args.len() + 1 + 1;
+                sp -= num_entries * mem::size_of::<usize>();
+                sp = (sp - 16) + (sp % 16);
+                sp += num_entries * mem::size_of::<usize>();
+            }
+
             // Push arguments and variables
             for iter in &[&vars, &args] {
                 // Push null-terminator
@@ -717,6 +742,13 @@ fn fexec_noreturn(
             // Push arguments length
             sp -= mem::size_of::<usize>();
             unsafe { *(sp as *mut usize) = args.len(); }
+
+            #[cfg(target_arch = "aarch64")]
+            {
+                if sp % 16 != 0 {
+                    panic!("fexec_noreturn: misaligned stack: sp = 0x{:x}, arg.len(), ", sp);
+                }
+            }
 
             if arg_size > 0 {
                 let mut memory = context::memory::Memory::new(
@@ -748,6 +780,9 @@ fn fexec_noreturn(
 
             // Args no longer required, can deallocate
             drop(args);
+
+            #[cfg(target_arch = "aarch64")]
+            context.arch.set_context_handle();
 
             context.actions = Arc::new(Mutex::new(vec![(
                 SigAction {
