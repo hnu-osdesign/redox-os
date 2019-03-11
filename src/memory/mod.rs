@@ -82,7 +82,21 @@ pub unsafe fn init_x86_64(kernel_start: usize, kernel_end: usize) {
     *ALLOCATOR.lock() = Some(RecycleAllocator::new(BumpAllocator::new(kernel_start, kernel_end, MemoryAreaIter::new(MEMORY_AREA_FREE))));
 }
 
+pub unsafe fn init_aarch64(kernel_start: usize, kernel_end: usize) {
+    use consts::{KERNEL_STACK_SIZE};
+
+    for entry in MEMORY_MAP.iter() {
+        if entry._type != MEMORY_AREA_NULL {
+            println!("{:?}", entry);
+        }
+    }
+
+    *ALLOCATOR.lock() = Some(RecycleAllocator::new(BumpAllocator::new(kernel_start, kernel_end + KERNEL_STACK_SIZE, MemoryAreaIter::new(MEMORY_AREA_FREE))));
+}
+
 pub unsafe fn init(kernel_start: usize, kernel_end: usize) {
+    #[cfg(target_arch = "aarch64")]
+    init_aarch64(kernel_start, kernel_end);
     #[cfg(target_arch = "x86_64")]
     init_x86_64(kernel_start, kernel_end);
 }
