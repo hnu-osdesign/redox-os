@@ -165,6 +165,11 @@ impl PhysicalAddress {
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct VirtualAddress(usize);
 
+pub enum VAddrType {
+    User,
+    Kernel
+}
+
 impl VirtualAddress {
     pub fn new(address: usize) -> Self {
         VirtualAddress(address)
