@@ -1,6 +1,6 @@
 use core::{mem, slice};
 
-use paging::{ActivePageTable, Page, VirtualAddress};
+use paging::{ActivePageTable, Page, PageTableType, VirtualAddress, VAddrType};
 use paging::entry::EntryFlags;
 use syscall::error::*;
 
@@ -8,7 +8,12 @@ fn validate(address: usize, size: usize, flags: EntryFlags) -> Result<()> {
     let end_offset = size.checked_sub(1).ok_or(Error::new(EFAULT))?;
     let end_address = address.checked_add(end_offset).ok_or(Error::new(EFAULT))?;
 
-    let active_table = unsafe { ActivePageTable::new() };
+    let v = VirtualAddress::new(address);
+    let active_table: ActivePageTable;
+    match v.get_type() {
+        VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+        VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) }
+    }
 
     let start_page = Page::containing_address(VirtualAddress::new(address));
     let end_page = Page::containing_address(VirtualAddress::new(end_address));

@@ -4,7 +4,7 @@ use alloc::collections::BTreeMap;
 use core::alloc::{GlobalAlloc, Layout};
 use core::mem;
 use core::sync::atomic::Ordering;
-use paging;
+use paging::{ActivePageTable, PageTableType};
 use spin::RwLock;
 
 use syscall::error::{Result, Error, EAGAIN};
@@ -77,7 +77,7 @@ impl ContextList {
                 let func_ptr = stack.as_mut_ptr().offset(offset as isize);
                 *(func_ptr as *mut usize) = func as usize;
             }
-            context.arch.set_page_table(unsafe { paging::ActivePageTable::new().address() });
+            context.arch.set_page_table(unsafe { ActivePageTable::new(PageTableType::User).address() });
             context.arch.set_fx(fx.as_ptr() as usize);
             context.arch.set_stack(stack.as_ptr() as usize + offset);
             context.kfx = Some(fx);

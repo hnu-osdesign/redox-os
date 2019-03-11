@@ -7,9 +7,9 @@ use arch::paging::PAGE_SIZE;
 use context::file::FileDescriptor;
 use ipi::{ipi, IpiKind, IpiTarget};
 use memory::Frame;
-use paging::{ActivePageTable, InactivePageTable, Page, PageIter, PhysicalAddress, VirtualAddress};
+use paging::{ActivePageTable, InactivePageTable, Page, PageIter, PageTableType, PhysicalAddress, VirtualAddress, VAddrType};
 use paging::entry::EntryFlags;
-use paging::mapper::MapperFlushAll;
+use paging::mapper::{MapperFlushAll, MapperType};
 use paging::temporary_page::TemporaryPage;
 
 #[derive(Debug)]
@@ -24,7 +24,11 @@ pub struct Grant {
 
 impl Grant {
     pub fn physmap(from: PhysicalAddress, to: VirtualAddress, size: usize, flags: EntryFlags) -> Grant {
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match to.get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) }
+        }
 
         let mut flush_all = MapperFlushAll::new();
 
@@ -48,7 +52,11 @@ impl Grant {
     }
 
     pub fn map(to: VirtualAddress, size: usize, flags: EntryFlags) -> Grant {
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match to.get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) }
+        }
 
         let mut flush_all = MapperFlushAll::new();
 
@@ -71,7 +79,17 @@ impl Grant {
     }
 
     pub fn map_inactive(from: VirtualAddress, to: VirtualAddress, size: usize, flags: EntryFlags, desc_opt: Option<FileDescriptor>, new_table: &mut InactivePageTable, temporary_page: &mut TemporaryPage) -> Grant {
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut from_active_table: ActivePageTable;
+        match from.get_type() {
+            VAddrType::User => from_active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => from_active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) },
+        }
+
+        let mut to_active_table: ActivePageTable;
+        match to.get_type() {
+            VAddrType::User => to_active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => to_active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) },
+        }
 
         //TODO: Do not allocate
         let mut frames = VecDeque::with_capacity(size/PAGE_SIZE);
@@ -79,11 +97,11 @@ impl Grant {
         let start_page = Page::containing_address(from);
         let end_page = Page::containing_address(VirtualAddress::new(from.get() + size - 1));
         for page in Page::range_inclusive(start_page, end_page) {
-            let frame = active_table.translate_page(page).expect("grant references unmapped memory");
+            let frame = from_active_table.translate_page(page).expect("grant references unmapped memory");
             frames.push_back(frame);
         }
 
-        active_table.with(new_table, temporary_page, |mapper| {
+        to_active_table.with(new_table, temporary_page, |mapper| {
             let start_page = Page::containing_address(to);
             let end_page = Page::containing_address(VirtualAddress::new(to.get() + size - 1));
             for page in Page::range_inclusive(start_page, end_page) {
@@ -120,7 +138,12 @@ impl Grant {
     pub fn unmap(mut self) {
         assert!(self.mapped);
 
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match self.start.get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) },
+        }
+
 
         let mut flush_all = MapperFlushAll::new();
 
@@ -139,7 +162,11 @@ impl Grant {
     pub fn unmap_inactive(mut self, new_table: &mut InactivePageTable, temporary_page: &mut TemporaryPage) {
         assert!(self.mapped);
 
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match self.start.get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) },
+        }
 
         active_table.with(new_table, temporary_page, |mapper| {
             let start_page = Page::containing_address(self.start);
@@ -240,7 +267,11 @@ impl Memory {
     }
 
     fn map(&mut self, clear: bool) {
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match self.start_address().get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) }
+        }
 
         let mut flush_all = MapperFlushAll::new();
 
@@ -260,7 +291,11 @@ impl Memory {
     }
 
     fn unmap(&mut self) {
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match self.start_address().get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) }
+        }
 
         let mut flush_all = MapperFlushAll::new();
 
@@ -275,7 +310,11 @@ impl Memory {
     /// A complicated operation to move a piece of memory to a new page table
     /// It also allows for changing the address at the same time
     pub fn move_to(&mut self, new_start: VirtualAddress, new_table: &mut InactivePageTable, temporary_page: &mut TemporaryPage) {
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match self.start_address().get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) }
+        }
 
         let mut flush_all = MapperFlushAll::new();
 
@@ -297,7 +336,11 @@ impl Memory {
     }
 
     pub fn remap(&mut self, new_flags: EntryFlags) {
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match self.start_address().get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) }
+        }
 
         let mut flush_all = MapperFlushAll::new();
 
@@ -312,7 +355,11 @@ impl Memory {
     }
 
     pub fn resize(&mut self, new_size: usize, clear: bool) {
-        let mut active_table = unsafe { ActivePageTable::new() };
+        let mut active_table: ActivePageTable;
+        match self.start_address().get_type() {
+            VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+            VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) }
+        }
 
         //TODO: Calculate page changes to minimize operations
         if new_size > self.size {

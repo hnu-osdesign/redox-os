@@ -1,6 +1,6 @@
 use interrupt::syscall::SyscallStack;
 use memory::{allocate_frames, deallocate_frames, Frame};
-use paging::{ActivePageTable, PhysicalAddress, VirtualAddress};
+use paging::{ActivePageTable, PhysicalAddress, VirtualAddress, PageTableType, VAddrType};
 use paging::entry::EntryFlags;
 use context;
 use context::memory::Grant;
@@ -133,7 +133,13 @@ pub fn physunmap(virtual_address: usize) -> Result<usize> {
 pub fn virttophys(virtual_address: usize) -> Result<usize> {
     enforce_root()?;
 
-    let active_table = unsafe { ActivePageTable::new() };
+    let v = VirtualAddress::new(virtual_address);
+    let mut active_table: ActivePageTable;
+    match v.get_type() {
+        VAddrType::User => active_table = unsafe { ActivePageTable::new(PageTableType::User) },
+        VAddrType::Kernel => active_table = unsafe { ActivePageTable::new(PageTableType::Kernel) },
+    }
+
     match active_table.translate(VirtualAddress::new(virtual_address)) {
         Some(physical_address) => Ok(physical_address.get()),
         None => Err(Error::new(EFAULT))

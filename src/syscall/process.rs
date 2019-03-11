@@ -7,7 +7,7 @@ use core::ops::DerefMut;
 use spin::Mutex;
 
 use memory::allocate_frames;
-use paging::{ActivePageTable, InactivePageTable, Page, VirtualAddress};
+use paging::{ActivePageTable, InactivePageTable, Page, PageTableType, VirtualAddress};
 use paging::entry::EntryFlags;
 use paging::mapper::MapperFlushAll;
 use paging::temporary_page::TemporaryPage;
@@ -343,7 +343,7 @@ pub fn clone(flags: usize, stack_base: usize) -> Result<ContextId> {
 
             context.arch = arch;
 
-            let mut active_table = unsafe { ActivePageTable::new() };
+            let mut active_table = unsafe { ActivePageTable::new(PageTableType::User) };
 
             let mut temporary_page = TemporaryPage::new(Page::containing_address(VirtualAddress::new(::USER_TMP_MISC_OFFSET)));
 
@@ -1150,7 +1150,7 @@ pub fn mprotect(address: usize, size: usize, flags: usize) -> Result<usize> {
     let end_offset = size.checked_sub(1).ok_or(Error::new(EFAULT))?;
     let end_address = address.checked_add(end_offset).ok_or(Error::new(EFAULT))?;
 
-    let mut active_table = unsafe { ActivePageTable::new() };
+    let mut active_table = unsafe { ActivePageTable::new(PageTableType::User) };
 
     let mut flush_all = MapperFlushAll::new();
 
