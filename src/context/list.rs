@@ -83,6 +83,19 @@ impl ContextList {
                     context.kfx = Some(fx);
                 }
             }
+            #[cfg(target_arch = "aarch64")]
+            {
+                context.arch.set_lr(func as usize);
+                context.arch.set_context_handle();
+
+                let mut aligned_stack_ptr = stack.as_ptr() as usize + offset;
+                if aligned_stack_ptr % 16 != 0 {
+                    aligned_stack_ptr = (aligned_stack_ptr - 16) + (aligned_stack_ptr % 16);
+                }
+
+                context.arch.set_stack(aligned_stack_ptr);
+            }
+
             context.arch.set_page_table(unsafe { ActivePageTable::new(PageTableType::User).address() });
             context.kstack = Some(stack);
         }
