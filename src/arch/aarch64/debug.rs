@@ -1,9 +1,7 @@
 use core::fmt;
 use spin::MutexGuard;
 
-use devices::uart_16550::SerialPort;
-use syscall::io::Pio;
-
+use devices::uart_pl011::SerialPort;
 use super::device::serial::COM1;
 
 pub struct Writer<'a> {
