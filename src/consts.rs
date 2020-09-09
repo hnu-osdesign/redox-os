@@ -12,7 +12,7 @@
     pub const RECURSIVE_PAGE_PML4: usize = (RECURSIVE_PAGE_OFFSET & PML4_MASK)/PML4_SIZE;
 
     /// Offset of kernel
-    pub const KERNEL_OFFSET: usize = RECURSIVE_PAGE_OFFSET - PML4_SIZE;
+    pub const KERNEL_OFFSET: usize = 0xFFFF_8000_0000_0000; //TODO: better calculation
     pub const KERNEL_PML4: usize = (KERNEL_OFFSET & PML4_MASK)/PML4_SIZE;
 
     /// Offset to kernel heap
