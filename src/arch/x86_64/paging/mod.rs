@@ -158,6 +158,29 @@ pub unsafe fn init(
 
     let mut active_table = ActivePageTable::new_unlocked();
 
+
+    {
+        let size = &__tbss_end as *const _ as usize - &__tdata_start as *const _ as usize;
+
+        let start = crate::KERNEL_PERCPU_OFFSET + crate::KERNEL_PERCPU_SIZE * cpu_id;
+        let end = start + size;
+
+        let start_page = Page::containing_address(VirtualAddress::new(start));
+        let end_page = Page::containing_address(VirtualAddress::new(end - 1));
+        for page in Page::range_inclusive(start_page, end_page) {
+            let result = active_table.map(
+                page,
+                EntryFlags::PRESENT
+                    | EntryFlags::GLOBAL
+                    | EntryFlags::WRITABLE,
+            );
+            // The flush can be ignored as this is not the active table. See later active_table.switch
+            result.ignore();
+        }
+
+        return (active_table, init_tcb(cpu_id));
+    }
+
     let mut temporary_page = TemporaryPage::new(Page::containing_address(VirtualAddress::new(
         crate::USER_TMP_MISC_OFFSET,
     )));

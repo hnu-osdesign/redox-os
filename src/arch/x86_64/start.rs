@@ -113,8 +113,8 @@ pub unsafe extern fn kstart(args_ptr: *const KernelArgs) -> ! {
         // Set up IDT before paging
         idt::init();
 
-        // Initialize memory management
-        memory::init(0, kernel_base + ((kernel_size + 4095)/4096) * 4096);
+        // Initialize RMM
+        crate::arch::rmm::rmm(kernel_base + ((kernel_size + 4095)/4096) * 4096);
 
         // Initialize paging
         let (mut active_table, tcb_offset) = paging::init(0, kernel_base, kernel_base + kernel_size, stack_base, stack_base + stack_size, ext_mem_ranges.as_ref().map(|arr| &arr[..]).unwrap_or(&[]));
@@ -170,9 +170,6 @@ pub unsafe extern fn kstart(args_ptr: *const KernelArgs) -> ! {
 
         // Initialize all of the non-core devices not otherwise needed to complete initialization
         device::init_noncore();
-
-        // Initialize memory functions after core has loaded
-        memory::init_noncore();
 
         // Stop graphical debug
         #[cfg(feature="graphical_debug")]
