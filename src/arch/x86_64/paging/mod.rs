@@ -158,7 +158,6 @@ pub unsafe fn init(
 
     let mut active_table = ActivePageTable::new_unlocked();
 
-
     {
         let size = &__tbss_end as *const _ as usize - &__tdata_start as *const _ as usize;
 
