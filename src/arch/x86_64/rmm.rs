@@ -16,6 +16,40 @@ use rmm::{
 
 use spin::Mutex;
 
+extern "C" {
+    /// The starting byte of the text (code) data segment.
+    static mut __text_start: u8;
+    /// The ending byte of the text (code) data segment.
+    static mut __text_end: u8;
+    /// The starting byte of the _.rodata_ (read-only data) segment.
+    static mut __rodata_start: u8;
+    /// The ending byte of the _.rodata_ (read-only data) segment.
+    static mut __rodata_end: u8;
+}
+
+unsafe fn page_flags<A: Arch>(virt: VirtualAddress) -> usize {
+    let virt_addr = virt.data();
+
+    // Test for being inside a region
+    macro_rules! in_section {
+        ($n: ident) => {
+            virt_addr >= &concat_idents!(__, $n, _start) as *const u8 as usize
+                && virt_addr < &concat_idents!(__, $n, _end) as *const u8 as usize
+        };
+    }
+
+    if in_section!(text) {
+        // Remap text read-only, execute
+        0
+    } else if in_section!(rodata) {
+        // Remap rodata read-only, no execute
+        A::ENTRY_FLAG_NO_EXEC
+    } else {
+        // Remap everything else writable, no execute
+        A::ENTRY_FLAG_WRITABLE | A::ENTRY_FLAG_NO_EXEC
+    }
+}
+
 unsafe fn inner<A: Arch>(areas: &'static [MemoryArea], bump_offset: usize) -> BuddyAllocator<A> {
     // First, calculate how much memory we have
     let mut size = 0;
@@ -42,10 +76,11 @@ unsafe fn inner<A: Arch>(areas: &'static [MemoryArea], bump_offset: usize) -> Bu
             for i in 0..area.size / A::PAGE_SIZE {
                 let phys = area.base.add(i * A::PAGE_SIZE);
                 let virt = A::phys_to_virt(phys);
+                let flags = page_flags::<A>(virt);
                 let flush = mapper.map_phys(
                     virt,
                     phys,
-                    A::ENTRY_FLAG_WRITABLE
+                    flags
                 ).expect("failed to map frame");
                 flush.ignore(); // Not the active table
             }
