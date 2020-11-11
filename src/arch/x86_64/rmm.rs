@@ -167,7 +167,7 @@ pub unsafe fn mapper_current() -> PageMapper<'static, X8664Arch, LockedAllocator
     PageMapper::current(&mut FRAME_ALLOCATOR)
 }
 
-pub unsafe fn rmm(kernel_end: usize) {
+pub unsafe fn init(kernel_end: usize) {
     type A = X8664Arch;
 
     println!("kernel_end: {:X}", kernel_end);

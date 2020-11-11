@@ -114,7 +114,7 @@ pub unsafe extern fn kstart(args_ptr: *const KernelArgs) -> ! {
         idt::init();
 
         // Initialize RMM
-        crate::arch::rmm::rmm(kernel_base + ((kernel_size + 4095)/4096) * 4096);
+        crate::arch::rmm::init(kernel_base + ((kernel_size + 4095)/4096) * 4096);
 
         // Initialize paging
         let (mut active_table, tcb_offset) = paging::init(0, kernel_base, kernel_base + kernel_size, stack_base, stack_base + stack_size, ext_mem_ranges.as_ref().map(|arr| &arr[..]).unwrap_or(&[]));
