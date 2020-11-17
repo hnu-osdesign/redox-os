@@ -1,7 +1,6 @@
-/// This function is where the kernel sets up IRQ handlers
+///  这个函数是用于内核设置中断处理程序
 /// It is increcibly unsafe, and should be minimal in nature
-/// It must create the IDT with the correct entries, those entries are
-/// defined in other files inside of the `arch` module
+/// It must create the IDT with the correct entries, those entries are defined in other files inside of the `arch` module
 
 use core::slice;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -74,7 +73,7 @@ pub unsafe extern fn kstart(args_ptr: *const KernelArgs) -> ! {
         let acpi_rsdps_base = args.acpi_rsdps_base;
         let acpi_rsdps_size = args.acpi_rsdps_size;
 
-        // BSS should already be zero
+        // BSS should already be zero ，BSS段
         {
             assert_eq!(BSS_TEST_ZERO, 0);
             assert_eq!(DATA_TEST_NONZERO, 0xFFFF_FFFF_FFFF_FFFF);
