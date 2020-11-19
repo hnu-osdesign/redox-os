@@ -6,7 +6,7 @@ use std::path::Path;
 
 // View loc folder with subfolders, get listings
 // Returns touple (folder_map, file_list)
-// folder_map keys are folders, and values are lists of direct childs111
+// folder_map keys are folders, and values are lists of direct childs
 // file_list is a vector of all detected files with full path
 fn scan_folder(loc: &Path) -> (HashMap<String, Vec<String>>, Vec<String>) {
     let mut folders: HashMap<String, Vec<String>> = HashMap::new();

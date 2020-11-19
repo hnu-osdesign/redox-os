@@ -229,7 +229,7 @@ pub fn kmain(cpus: usize, env: &'static [u8]) -> ! {
             if context::switch() {
                 interrupt::enable_and_nop();
             } else {
-                // Enable interrupts, then halt CPU (to save power) until the next interrupt is actually fired.
+                // 启用中断，然后停止CPU（以节省电源），直到下一个中断真正被触发。
                 interrupt::enable_and_halt();
             }
         }
