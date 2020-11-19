@@ -58,10 +58,11 @@ pub struct KernelArgs {
     acpi_rsdps_size: u64,
 }
 
-/// The entry to Rust, all things must be initialized
+/// rust入口点，所有都需要初始化。
 #[no_mangle]
 pub unsafe extern fn kstart(args_ptr: *const KernelArgs) -> ! {
     let env = {
+        ///env=slice::from_raw_parts(env_base as *const u8, env_size);
         let args = &*args_ptr;
 
         let kernel_base = args.kernel_base as usize;
@@ -82,7 +83,7 @@ pub unsafe extern fn kstart(args_ptr: *const KernelArgs) -> ! {
         KERNEL_BASE.store(kernel_base, Ordering::SeqCst);
         KERNEL_SIZE.store(kernel_size, Ordering::SeqCst);
 
-        // Initialize logger
+        // Initialize logger 初始化日志
         log::init_logger(|r| {
             use core::fmt::Write;
             let _ = write!(
@@ -99,32 +100,32 @@ pub unsafe extern fn kstart(args_ptr: *const KernelArgs) -> ! {
         info!("Stack: {:X}:{:X}", stack_base, stack_base + stack_size);
         info!("Env: {:X}:{:X}", env_base, env_base + env_size);
         info!("RSDPs: {:X}:{:X}", acpi_rsdps_base, acpi_rsdps_base + acpi_rsdps_size);
-
+        //Remove unnecessary kernel args. 移除不必要的内核参数。
         let ext_mem_ranges = if args.acpi_rsdps_base != 0 && args.acpi_rsdps_size > 0 {
             Some([(acpi_rsdps_base as usize, acpi_rsdps_size as usize)])
         } else {
             None
         };
 
-        // Set up GDT before paging
+        // Set up GDT before paging 在分页之前设置GDT(全局段表)
         gdt::init();
 
-        // Set up IDT before paging
+        // Set up IDT before paging 在分页之前设置IDT（中断描述符表）
         idt::init();
 
-        // Initialize memory management
+        // Initialize memory management 初始化内存模块
         memory::init(0, kernel_base + ((kernel_size + 4095)/4096) * 4096);
 
-        // Initialize paging
+        // Initialize paging 初始化分页
         let (mut active_table, tcb_offset) = paging::init(0, kernel_base, kernel_base + kernel_size, stack_base, stack_base + stack_size, ext_mem_ranges.as_ref().map(|arr| &arr[..]).unwrap_or(&[]));
 
-        // Set up GDT after paging with TLS
+        // Set up GDT after paging with TLS 设置GDT在使用TLS(线程局部存储)的分页之后。
         gdt::init_paging(tcb_offset, stack_base + stack_size);
 
-        // Set up IDT
+        // Set up IDT 设置IDT（中断表）
         idt::init_paging_bsp();
 
-        // Set up syscall instruction
+        // Set up syscall instruction 设置系统调用指令
         interrupt::syscall::init();
 
         // Test tdata and tbss
@@ -137,30 +138,30 @@ pub unsafe extern fn kstart(args_ptr: *const KernelArgs) -> ! {
             assert_eq!(TDATA_TEST_NONZERO, 0xFFFF_FFFF_FFFF_FFFE);
         }
 
-        // Reset AP variables
+        // Reset AP variables 设置AP变量（用于副CPU）
         CPU_COUNT.store(1, Ordering::SeqCst);
         AP_READY.store(false, Ordering::SeqCst);
         BSP_READY.store(false, Ordering::SeqCst);
 
-        // Setup kernel heap
+        // Setup kernel heap 设置内核堆
         allocator::init(&mut active_table);
 
         idt::init_paging_post_heap(true, 0);
 
-        // Activate memory logging
+        // Activate memory logging 激活内存日志。
         log::init();
 
-        // Use graphical debug
+        // Use graphical debug 使用图形化debug
         #[cfg(feature="graphical_debug")]
         graphical_debug::init(&mut active_table);
 
         #[cfg(feature = "system76_ec_debug")]
         device::system76_ec::init();
 
-        // Initialize devices
+        // Initialize devices 初始化设备
         device::init(&mut active_table);
 
-        // Read ACPI tables, starts APs
+        // Read ACPI tables, starts APs 初始化acpi（高级配置和电源管理接口）和设备
         #[cfg(feature = "acpi")]
         {
             acpi::init(&mut active_table, if acpi_rsdps_base != 0 && acpi_rsdps_size > 0 { Some((acpi_rsdps_base, acpi_rsdps_size)) } else { None });
