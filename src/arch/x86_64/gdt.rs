@@ -1,4 +1,5 @@
 //! Global descriptor table
+//设置全局段表
 
 use core::mem;
 use x86::segmentation::load_cs;
@@ -51,6 +52,7 @@ static mut INIT_GDT: [GdtEntry; 4] = [
     // Kernel data
     GdtEntry::new(0, 0, GDT_A_PRESENT | GDT_A_RING_0 | GDT_A_SYSTEM | GDT_A_PRIVILEGE, GDT_F_LONG_MODE),
     // Kernel TLS
+    // TLS(Thread Local Storage 线程局部存储)
     GdtEntry::new(0, 0, GDT_A_PRESENT | GDT_A_RING_3 | GDT_A_SYSTEM | GDT_A_PRIVILEGE, GDT_F_LONG_MODE)
 ];
 
@@ -83,6 +85,7 @@ pub static mut GDT: [GdtEntry; 9] = [
 ];
 
 #[thread_local]
+//TSS(任务状态段)，负责上下文切换中的"现场保存"以及"现场恢复"
 pub static mut TSS: TaskStateSegment = TaskStateSegment {
     reserved: 0,
     rsp: [0; 3],
@@ -173,7 +176,10 @@ pub unsafe fn init_paging(tcb_offset: usize, stack_offset: usize) {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(packed)]
+//段表条目的结构可对照实验课haribote OS建立的GDT，是一样的；
 pub struct GdtEntry {
+    //offset相当于base，对应段的基址
+    //l--low、m-mid、h-high
     pub limitl: u16,
     pub offsetl: u16,
     pub offsetm: u8,
@@ -181,8 +187,10 @@ pub struct GdtEntry {
     pub flags_limith: u8,
     pub offseth: u8
 }
-
+//修改段表条目的相关方法
 impl GdtEntry {
+    //新建一个段
+    //flags中单独存储"段的扩展访问权限(4-bits)"
     pub const fn new(offset: u32, limit: u32, access: u8, flags: u8) -> Self {
         GdtEntry {
             limitl: limit as u16,
@@ -193,13 +201,13 @@ impl GdtEntry {
             offseth: (offset >> 24) as u8
         }
     }
-
+    //修改段的基址
     pub fn set_offset(&mut self, offset: u32) {
         self.offsetl = offset as u16;
         self.offsetm = (offset >> 16) as u8;
         self.offseth = (offset >> 24) as u8;
     }
-
+    //修改段的大小限制
     pub fn set_limit(&mut self, limit: u32) {
         self.limitl = limit as u16;
         self.flags_limith = self.flags_limith & 0xF0 | ((limit >> 16) as u8) & 0x0F;
