@@ -22,15 +22,15 @@ impl Log {
     }
 
     pub fn read(&self) -> (&[u8], &[u8]) {
-        self.data.as_slices()
+        self.data.as_slices() //分别从头尾返回双向队列的切片。
     }
 
     pub fn write(&mut self, buf: &[u8]) {
         for &b in buf {
-            while self.data.len() + 1 >= self.size {
+            while self.data.len() + 1 >= self.size { //大小不够就从双向队列的头部pop。
                 self.data.pop_front();
             }
-            self.data.push_back(b);
+            self.data.push_back(b); //再从尾部push。
         }
     }
 }
