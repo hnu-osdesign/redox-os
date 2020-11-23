@@ -2,21 +2,21 @@ use alloc::collections::VecDeque;
 use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 
-pub static LOG: Mutex<Option<Log>> = Mutex::new(None);
+pub static LOG: Mutex<Option<Log>> = Mutex::new(None);//定义全局变量LOG为Mutex类型，参数Option，如果有值就定义为Log类型的。
 
 pub fn init() {
-    *LOG.lock() = Some(Log::new(1024 * 1024));
+    *LOG.lock() = Some(Log::new(1024 * 1024));//返回一个option，使值为Some，绑定在LOG的data上。
 }
 
-pub struct Log {
+pub struct Log {//log 结构体，包含数据和数据的大小。
     data: VecDeque<u8>,
     size: usize,
 }
 
 impl Log {
-    pub fn new(size: usize) -> Log {
+    pub fn new(size: usize) -> Log {//方法new()，创建一个Log
         Log {
-            data: VecDeque::with_capacity(size),
+            data: VecDeque::with_capacity(size),//容量为size
             size
         }
     }
