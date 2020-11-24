@@ -1,5 +1,5 @@
 //! # Paging
-//! Some code was borrowed from [Phil Opp's Blog](http://os.phil-opp.com/modifying-page-tables.html)
+//! Some code was borrowed from [Phil Opp's Blog](http://os.phil-opp.com/modifying-page-tables.html) 参考代码来源
 
 use core::ops::{Deref, DerefMut};
 use core::{mem, ptr};
