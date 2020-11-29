@@ -15,7 +15,7 @@ pub mod recycle;
 
 /// The current memory map. It's size is maxed out to 512 entries, due to it being
 /// from 0x500 to 0x5000 (800 is the absolute total)
-static mut MEMORY_MAP: [MemoryArea; 512] = [MemoryArea { base_addr: 0, length: 0, _type: 0, acpi: 0 }; 512];
+static mut MEMORY_MAP: [MemoryArea; 512] = [MemoryArea { base_addr: 0, length: 0, _type: 0, acpi: 0 }; 512];//初始化MEMORY_MAP
 
 /// Memory does not exist
 pub const MEMORY_AREA_NULL: u32 = 0;
@@ -74,14 +74,15 @@ static ALLOCATOR: Mutex<Option<RecycleAllocator<BumpAllocator>>> = Mutex::new(No
 /// Must be called once, and only once,
 pub unsafe fn init(kernel_start: usize, kernel_end: usize) {
     // Copy memory map from bootloader location
-    for (i, entry) in MEMORY_MAP.iter_mut().enumerate() {
-        *entry = *(0x500 as *const MemoryArea).add(i);
-        if entry._type != MEMORY_AREA_NULL {
+    for (i, entry) in MEMORY_MAP.iter_mut().enumerate() {//enumerate返回的迭代器产生对(i, val)，其中i是当前迭代索引，val是迭代器返回的值。
+        *entry = *(0x500 as *const MemoryArea).add(i);//以0x500为基地址偏移i。
+        if entry._type != MEMORY_AREA_NULL {//如果地址类型不为NULL，则保存到info宏中。
             info!("{:X?}", entry);
         }
     }
 
     *ALLOCATOR.lock() = Some(RecycleAllocator::new(BumpAllocator::new(kernel_start, kernel_end, MemoryAreaIter::new(MEMORY_AREA_FREE))));
+    //获取一个互斥锁，阻塞当前线程，直到申请一个分配器，参数是内核的开始到结束，内存类型是可用（free）。
 }
 
 /// Init memory module after core
