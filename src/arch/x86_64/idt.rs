@@ -12,28 +12,40 @@ use crate::interrupt::*;
 use crate::ipi::IpiKind;
 
 use spin::RwLock;
+/*pub enum Ordering {
+    Relaxed,
+    Release,
+    Acquire,
+    AcqRel,
+    SeqCst,
+}*/
 
-pub static mut INIT_IDTR: DescriptorTablePointer<X86IdtEntry> = DescriptorTablePointer {
-    limit: 0,
-    base: 0 as *const X86IdtEntry
-};
+pub static mut INIT_IDTR: DescriptorTablePointer<X86IdtEntry> = DescriptorTablePointer {//IDTR初始化
+    limit: 0,//上限 16位
+    base: 0 as *const X86IdtEntry//基址 64位
+};//可变
 
 #[thread_local]
-pub static mut IDTR: DescriptorTablePointer<X86IdtEntry> = DescriptorTablePointer {
+pub static  IDTR: DescriptorTablePointer<X86IdtEntry> = DescriptorTablePointer {
     limit: 0,
     base: 0 as *const X86IdtEntry
-};
+};//不可变
 
-pub type IdtEntries = [IdtEntry; 256];
-pub type IdtReservations = [AtomicU64; 4];
+pub type IdtEntries = [IdtEntry; 256];//256个中断
+pub type IdtReservations = [AtomicU64; 4];//原子整数数组 ，u64
 
 #[repr(packed)]
 pub struct Idt {
     entries: IdtEntries,
     reservations: IdtReservations,
 }
+/*const fn new_idt_reservations() -> [AtomicU64; 4] {
+    [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)] //
+}
+pub const fn new(v: u64) -> Self 创造一个原子整数
+*/
 impl Idt {
-    pub const fn new() -> Self {
+    pub const fn new() -> Self {//初始化
         Self {
             entries: [IdtEntry::new(); 256],
             reservations: new_idt_reservations(),
@@ -41,10 +53,12 @@ impl Idt {
     }
     #[inline]
     pub fn is_reserved(&self, index: u8) -> bool {
-        let byte_index = index / 64;
+        let byte_index = index / 64;//右移6位，结果一定在0-3
         let bit = index % 64;
 
         unsafe { &self.reservations[usize::from(byte_index)] }.load(Ordering::Acquire) & (1 << bit) != 0
+        //Converts a NonZeroUsize into an usize, unsize::from,NonZeroUsize已知不等于0的整数
+        //pub fn load(&self, order: Ordering) -> u64 从原子整数加载值。load使用一个Ordering参数，该参数描述此操作的内存顺序。
     }
 
     #[inline]
@@ -53,13 +67,15 @@ impl Idt {
         let bit = index % 64;
 
         unsafe { &self.reservations[usize::from(byte_index)] }.fetch_or(u64::from(reserved) << bit, Ordering::AcqRel);
+        //用当前值按位“或”。对当前值和参数val进行按位“或”运算，并将新值设置为结果。返回前一个值。
     }
     #[inline]
-    pub fn is_reserved_mut(&mut self, index: u8) -> bool {
+    pub fn is_reserved_mut(&mut self, index: u8) -> bool {//判断
         let byte_index = index / 64;
         let bit = index % 64;
 
         *unsafe { &mut self.reservations[usize::from(byte_index)] }.get_mut() & (1 << bit) != 0
+        //pub fn get_mut(&mut self) -> &mut u64 返回对基础整数的可变引用。
     }
 
     #[inline]
@@ -68,10 +84,11 @@ impl Idt {
         let bit = index % 64;
 
         *unsafe { &mut self.reservations[usize::from(byte_index)] }.get_mut() |= u64::from(reserved) << bit;
+        //返回对基础整数的可变引用。安全的，因为是原子的
     }
 }
 
-static mut INIT_BSP_IDT: Idt = Idt::new();
+static mut INIT_BSP_IDT: Idt = Idt::new();//声明了一个Idt变量
 
 // TODO: VecMap?
 pub static IDTS: RwLock<Option<BTreeMap<usize, &'static mut Idt>>> = RwLock::new(None);
@@ -120,11 +137,11 @@ macro_rules! use_default_irqs(
     }}
 );
 
-pub unsafe fn init() {
+pub unsafe fn init() {//start.rs引用的函数
     dtables::lidt(&INIT_IDTR);
 }
 
-const fn new_idt_reservations() -> [AtomicU64; 4] {
+const fn new_idt_reservations() -> [AtomicU64; 4] {//原子数组的初始化
     [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)]
 }
 
@@ -233,7 +250,7 @@ pub unsafe fn init_generic(is_bsp: bool, idt: &mut Idt) {
     dtables::lidt(&IDTR);
 }
 
-bitflags! {
+bitflags! {//属性位
     pub struct IdtFlags: u8 {
         const PRESENT = 1 << 7;
         const RING_0 = 0 << 5;
@@ -248,14 +265,15 @@ bitflags! {
 
 #[derive(Copy, Clone, Debug, Default)]
 #[repr(packed)]
-pub struct IdtEntry {
-    offsetl: u16,
-    selector: u16,
-    zero: u8,
-    attribute: u8,
-    offsetm: u16,
-    offseth: u32,
-    zero2: u32
+pub struct IdtEntry {//128位
+    offsetl: u16,//跳转函数地址低16位
+    selector: u16,//段选择子
+    zero: u8,//填充0x00
+    attribute: u8,//属性
+    offsetm: u16,//中16位
+    //之上为32位机器的中断表
+    offseth: u32,//高32位
+    zero2: u32//填充0x00
 }
 
 impl IdtEntry {
@@ -271,11 +289,11 @@ impl IdtEntry {
         }
     }
 
-    pub fn set_flags(&mut self, flags: IdtFlags) {
+    pub fn set_flags(&mut self, flags: IdtFlags) {//设置属性
         self.attribute = flags.bits;
     }
 
-    pub fn set_offset(&mut self, selector: u16, base: usize) {
+    pub fn set_offset(&mut self, selector: u16, base: usize) {//设置函数地址
         self.selector = selector;
         self.offsetl = base as u16;
         self.offsetm = (base >> 16) as u16;
