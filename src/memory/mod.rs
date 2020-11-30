@@ -26,7 +26,7 @@ pub const MEMORY_AREA_FREE: u32 = 1;
 /// Memory is reserved
 pub const MEMORY_AREA_RESERVED: u32 = 2;
 
-/// Memory is used by ACPI, and can be reclaimed
+/// Memory is used by ACPI, and can be reclaimed 内存被ACPI使用并可以取回
 pub const MEMORY_AREA_ACPI: u32 = 3;
 
 /// A memory map area
@@ -74,7 +74,7 @@ static ALLOCATOR: Mutex<Option<RecycleAllocator<BumpAllocator>>> = Mutex::new(No
 /// Must be called once, and only once,
 pub unsafe fn init(kernel_start: usize, kernel_end: usize) {
     // Copy memory map from bootloader location
-    for (i, entry) in MEMORY_MAP.iter_mut().enumerate() {//enumerate返回的迭代器产生对(i, val)，其中i是当前迭代索引，val是迭代器返回的值。
+    for (i, entry) in MEMORY_MAP.iter_mut().enumerate() {//MemoryArea类型。enumerate返回的迭代器产生对(i, val)，其中i是当前迭代索引，val是迭代器返回的值。
         *entry = *(0x500 as *const MemoryArea).add(i);//以0x500为基地址偏移i。
         if entry._type != MEMORY_AREA_NULL {//如果地址类型不为NULL，则保存到info宏中。
             info!("{:X?}", entry);
@@ -88,14 +88,14 @@ pub unsafe fn init(kernel_start: usize, kernel_end: usize) {
 /// Init memory module after core
 /// Must be called once, and only once,
 pub unsafe fn init_noncore() {
-    if let Some(ref mut allocator) = *ALLOCATOR.lock() {
-        allocator.set_noncore(true)
+    if let Some(ref mut allocator) = *ALLOCATOR.lock() {//阻塞直到得到一个ALLOCATOR锁可用，获得它的的引用。
+        allocator.set_noncore(true)//设置noncore为true
     } else {
         panic!("frame allocator not initialized");
     }
 }
 
-/// Get the number of frames available
+/// Get the number of frames available 返回可用帧的数量
 pub fn free_frames() -> usize {
     if let Some(ref allocator) = *ALLOCATOR.lock() {
         allocator.free_frames()
@@ -104,7 +104,7 @@ pub fn free_frames() -> usize {
     }
 }
 
-/// Get the number of frames used
+/// Get the number of frames used 返回使用帧的数量
 pub fn used_frames() -> usize {
     if let Some(ref allocator) = *ALLOCATOR.lock() {
         allocator.used_frames()
@@ -113,7 +113,7 @@ pub fn used_frames() -> usize {
     }
 }
 
-/// Allocate a range of frames
+/// Allocate a range of frames 分配一定数量的帧
 pub fn allocate_frames(count: usize) -> Option<Frame> {
     if let Some(ref mut allocator) = *ALLOCATOR.lock() {
         allocator.allocate_frames(count)
