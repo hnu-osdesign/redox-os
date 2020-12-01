@@ -129,7 +129,7 @@ pub fn allocate_frames_complex(count: usize, flags: PhysallocFlags, strategy: Op
     }
 }
 
-/// Deallocate a range of frames frame
+/// Deallocate a range of frames frame 释放一定数量的帧
 pub fn deallocate_frames(frame: Frame, count: usize) {
     if let Some(ref mut allocator) = *ALLOCATOR.lock() {
         allocator.deallocate_frames(frame, count)
@@ -146,7 +146,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    /// Get the address of this frame
+    /// Get the address of this frame 
     pub fn start_address(&self) -> PhysicalAddress {
         PhysicalAddress::new(self.number * PAGE_SIZE)
     }
