@@ -4,13 +4,14 @@
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 
-use crate::memory::allocate_frames;
+use crate::memory::allocate_frames;//分配一定数量的帧
 
 use super::entry::{EntryFlags, Entry};
-use super::ENTRY_COUNT;
+use super::ENTRY_COUNT;//定义在mod.rs 中，大小为512
 
 pub const P4: *mut Table<Level4> = (crate::RECURSIVE_PAGE_OFFSET | 0x7f_ffff_f000) as *mut _;
-
+//RECURSIVE_PAGE_OFFSET：usize = (-(PML4_SIZE as isize)) as usize
+//PML4_SIZE: usize = 0x0000_0080_0000_0000
 pub trait TableLevel {}
 
 pub enum Level4 {}
@@ -41,11 +42,11 @@ impl HierarchicalLevel for Level2 {
 
 #[repr(packed(4096))]
 pub struct Table<L: TableLevel> {
-    entries: [Entry; ENTRY_COUNT],
+    entries: [Entry; ENTRY_COUNT],//512个类型为Entry的数组
     level: PhantomData<L>,
 }
-
 impl<L> Table<L> where L: TableLevel {
+    //检测是否可用
     pub fn is_unused(&self) -> bool {
         if self.entry_count() > 0 {
             return false;
@@ -53,29 +54,29 @@ impl<L> Table<L> where L: TableLevel {
 
         true
     }
-
+    //将所有条目设置为未使用项，在创建新的页面表的时候用到
     pub fn zero(&mut self) {
         for entry in unsafe { &mut self.entries }.iter_mut() {
-            entry.set_zero();
+            entry.set_zero();//clear entry
         }
     }
 
-    /// Set number of entries in first table entry
+    //设置第1个表项的页表条目数
     fn set_entry_count(&mut self, count: u64) {
         debug_assert!(count <= ENTRY_COUNT as u64, "count can't be greater than ENTRY_COUNT");
         unsafe { &mut self.entries[0] }.set_counter_bits(count)
     }
 
-    /// Get number of entries in first table entry
+    ///获取第1个表项的页表条目数
     fn entry_count(&self) -> u64 {
-        unsafe { &self.entries[0] }.counter_bits()
+        unsafe { &self.entries[0] }.counter_bits()  //获取计数值
     }
-
+    //增加页表条目数
     pub fn increment_entry_count(&mut self) {
         let current_count = self.entry_count();
         self.set_entry_count(current_count + 1);
     }
-
+    //减少页表条目数
     pub fn decrement_entry_count(&mut self) {
         let current_count = self.entry_count();
         self.set_entry_count(current_count - 1);
@@ -118,7 +119,7 @@ impl<L> Index<usize> for Table<L> where L: TableLevel {
     type Output = Entry;
 
     fn index(&self, index: usize) -> &Entry {
-        unsafe { &self.entries[index] }
+        unsafe { &self.entries[index] }//取出索引为index下的条目
     }
 }
 

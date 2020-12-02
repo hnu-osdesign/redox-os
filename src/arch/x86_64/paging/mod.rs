@@ -529,7 +529,7 @@ impl InactivePageTable {
     }
 }
 
-/// A physical address.
+/// A physical address. 元组结构体
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct PhysicalAddress(usize);
 
