@@ -105,8 +105,9 @@ impl<L> Table<L> where L: HierarchicalLevel {
     }
 
     fn next_table_address(&self, index: usize) -> Option<usize> {
-        let entry_flags = self[index].flags();
+        let entry_flags = self[index].flags();//取出对应的标志位
         if entry_flags.contains(EntryFlags::PRESENT) && !entry_flags.contains(EntryFlags::HUGE_PAGE) {
+            //存在相应条目且不创建大页面
             let table_address = self as *const _ as usize;
             Some((table_address << 9) | (index << 12))
         } else {
