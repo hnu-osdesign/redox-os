@@ -216,7 +216,7 @@ impl Mapper {
         (MapperFlush::new(page), frame)
     }
 
-    pub fn translate_page(&self, page: Page) -> Option<Frame> {
+    pub fn translate_page(&self, page: Page) -> Option<Frame> {//翻译地址
         self.p4().next_table(page.p4_index())
             .and_then(|p3| p3.next_table(page.p3_index()))
             .and_then(|p2| p2.next_table(page.p2_index()))
@@ -231,9 +231,12 @@ impl Mapper {
     }
 
     /// Translate a virtual address to a physical one
+    //将虚拟地址翻译成物理地址
     pub fn translate(&self, virtual_address: VirtualAddress) -> Option<PhysicalAddress> {
-        let offset = virtual_address.get() % PAGE_SIZE;
+        let offset = virtual_address.get() % PAGE_SIZE;//起始地址%页大小
         self.translate_page(Page::containing_address(virtual_address))
             .map(|frame| PhysicalAddress::new(frame.start_address().get() + offset))
+        //containing_address在mod.rs模块中
+        //
     }
 }

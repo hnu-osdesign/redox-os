@@ -583,13 +583,17 @@ impl Page {
     pub fn p1_index(self) -> usize {
         self.number & 0o777
     }
-
+    //检测地址的合法性，x86要求的地址只能是48位
     pub fn containing_address(address: VirtualAddress) -> Page {
         //TODO assert!(address.get() < 0x0000_8000_0000_0000 || address.get() >= 0xffff_8000_0000_0000,
         //    "invalid address: 0x{:x}", address.get());
         Page {
             number: address.get() / PAGE_SIZE,
         }
+        // invalid address: 0x0000_8000_0000_0000
+        // valid address:   0xffff_8000_0000_0000
+        //                         └── bit 47
+        //前面16位是符号扩展部分
     }
 
     pub fn range_inclusive(start: Page, end: Page) -> PageIter {

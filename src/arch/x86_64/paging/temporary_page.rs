@@ -7,12 +7,12 @@ use super::{ActivePageTable, Page, VirtualAddress};
 use super::entry::EntryFlags;
 use super::table::{Table, Level1};
 
-pub struct TemporaryPage {
+pub struct TemporaryPage {//临时页面
     page: Page,
 }
 
 impl TemporaryPage {
-    pub fn new(page: Page) -> TemporaryPage {
+    pub fn new(page: Page) -> TemporaryPage {//创建一个临时页面
         TemporaryPage { page }
     }
 
@@ -22,11 +22,12 @@ impl TemporaryPage {
 
     /// Maps the temporary page to the given frame in the active table.
     /// Returns the start address of the temporary page.
+    //页映射到帧
     pub fn map(&mut self, frame: Frame, flags: EntryFlags, active_table: &mut ActivePageTable) -> VirtualAddress {
         assert!(active_table.translate_page(self.page).is_none(), "temporary page is already mapped");
-        let result = active_table.map_to(self.page, frame, flags);
-        result.flush(active_table);
-        self.page.start_address()
+        let result = active_table.map_to(self.page, frame, flags);//建立page和frame的映射关系
+        result.flush(active_table);//刷新页表
+        self.page.start_address()//返回临时页的起始地址
     }
 
     /// Maps the temporary page to the given page table frame in the active

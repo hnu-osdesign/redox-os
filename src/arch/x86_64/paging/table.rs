@@ -84,10 +84,12 @@ impl<L> Table<L> where L: TableLevel {
 }
 
 impl<L> Table<L> where L: HierarchicalLevel {
+    //将地址转化为引用 ：函数1和函数2
+    //函数1
     pub fn next_table(&self, index: usize) -> Option<&Table<L::NextLevel>> {
         self.next_table_address(index).map(|address| unsafe { &*(address as *const _) })
     }
-
+    //函数2
     pub fn next_table_mut(&mut self, index: usize) -> Option<&mut Table<L::NextLevel>> {
         self.next_table_address(index).map(|address| unsafe { &mut *(address as *mut _) })
     }
@@ -107,9 +109,9 @@ impl<L> Table<L> where L: HierarchicalLevel {
     fn next_table_address(&self, index: usize) -> Option<usize> {
         let entry_flags = self[index].flags();//取出对应的标志位
         if entry_flags.contains(EntryFlags::PRESENT) && !entry_flags.contains(EntryFlags::HUGE_PAGE) {
-            //存在相应条目且不创建大页面
+            //存在相应条目且是页大小为4KB 
             let table_address = self as *const _ as usize;
-            Some((table_address << 9) | (index << 12))
+            Some((table_address << 9) | (index << 12))//构造下一级索引的地址
         } else {
             None
         }
