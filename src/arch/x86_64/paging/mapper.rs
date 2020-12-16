@@ -221,9 +221,20 @@ impl Mapper {
             .and_then(|p3| p3.next_table(page.p3_index()))
             .and_then(|p2| p2.next_table(page.p2_index()))
             .and_then(|p1| p1[page.p1_index()].pointed_frame())
+        //实现逻辑：p4索引存在的前提下，如果p3地址有效，索引找到p3的下一级页表
+        //                            如果p2地址有效，索引找到p2的下一级页表
+        //                            如果p1地址有效，索引找到对应的物理帧
+        //pointed_frane函数是通过entry_flags中的present位来进行判断的
+        //pub fn pointed_frame(&self) -> Option<Frame> {
+        //     if self.flags().contains(EntryFlags::PRESENT) {//检测present是否在EntryFlags中
+        //         Some(Frame::containing_address(self.address()))//创建帧
+        //     } else {
+        //         None
+        //     }
+        // }
     }
 
-    pub fn translate_page_flags(&self, page: Page) -> Option<EntryFlags> {
+    pub fn translate_page_flags(&self, page: Page) -> Option<EntryFlags> {//获取帧的标志位
         self.p4().next_table(page.p4_index())
             .and_then(|p3| p3.next_table(page.p3_index()))
             .and_then(|p2| p2.next_table(page.p2_index()))
@@ -237,6 +248,6 @@ impl Mapper {
         self.translate_page(Page::containing_address(virtual_address))
             .map(|frame| PhysicalAddress::new(frame.start_address().get() + offset))
         //containing_address在mod.rs模块中
-        //
+        //translate_page在mapper.rs模块中
     }
 }
