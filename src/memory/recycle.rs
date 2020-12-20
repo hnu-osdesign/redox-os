@@ -1,6 +1,6 @@
 //! Recycle allocator
 //! Uses freed frames if possible, then uses inner allocator
-
+//TODO: recycle.rs暂时没搞明白
 use alloc::vec::Vec;
 
 use crate::paging::PhysicalAddress;
@@ -13,10 +13,10 @@ struct Range {
     count: usize,
 }
 
-pub struct RecycleAllocator<T: FrameAllocator> {
+pub struct RecycleAllocator<T: FrameAllocator> {//回收器
     inner: T,
     noncore: bool,
-    free: Vec<Range>,
+    free: Vec<Range>,//多组需要回收的地址
 }
 
 impl<T: FrameAllocator> RecycleAllocator<T> {
@@ -27,20 +27,23 @@ impl<T: FrameAllocator> RecycleAllocator<T> {
             free: Vec::new(),
         }
     }
-
+    //需要释放帧的数量
     fn free_count(&self) -> usize {
         self.free.len()
     }
-
+    //地址合并的操作，把可能相接的地址合并成一块。
     fn merge(&mut self, address: usize, count: usize) -> bool {
         for i in 0 .. self.free.len() {
             let changed = {
                 let free = &mut self.free[i];
+                //向前合并
                 if address + count * super::PAGE_SIZE == free.base {
                     free.base = address;
                     free.count += count;
                     true
-                } else if free.base + free.count * super::PAGE_SIZE == address {
+                } 
+                //向后合并
+                else if free.base + free.count * super::PAGE_SIZE == address {
                     free.count += count;
                     true
                 } else {
@@ -52,7 +55,7 @@ impl<T: FrameAllocator> RecycleAllocator<T> {
                 //TODO: Use do not use recursion
                 let Range { base: address, count } = self.free[i];
                 if self.merge(address, count) {
-                    self.free.remove(i);
+                    self.free.remove(i);//递归调用，如果合并多个则删除项。
                 }
                 return true;
             }
@@ -70,7 +73,7 @@ impl<T: FrameAllocator> RecycleAllocator<T> {
 
         for (free_range_index, free_range) in self.free.iter().enumerate().skip(1) {
             // Later entries can be removed faster
-
+            //如果是32bits，且超出范围则什么也不做。
             if space32 && free_range.base + count * super::PAGE_SIZE >= 0x1_0000_0000 {
                 // We need a 32-bit physical address and this range is outside that address
                 // space.
@@ -82,6 +85,7 @@ impl<T: FrameAllocator> RecycleAllocator<T> {
                     // The free range does not fit the entire requested range, but is still
                     // at least as large as the minimum range. When using the "greedy"
                     // strategy, we return immediately.
+                    //使用贪心策略，如果即便不能释放所有帧
                     current_optimal_index = Some(free_range_index);
                     actual_size = free_range.count;
                     break;

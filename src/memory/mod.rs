@@ -141,7 +141,7 @@ pub fn deallocate_frames(frame: Frame, count: usize) {
 /// A frame, allocated by the frame allocator.
 /// Do not add more derives, or make anything `pub`!
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Frame {
+pub struct Frame {//帧号
     number: usize
 }
 
@@ -159,7 +159,7 @@ impl Frame {
     }
 
     /// Create a frame containing `address`
-    pub fn containing_address(address: PhysicalAddress) -> Frame {
+    pub fn containing_address(address: PhysicalAddress) -> Frame {//物理地址的对应帧
         Frame {
             number: address.get() / PAGE_SIZE
         }
