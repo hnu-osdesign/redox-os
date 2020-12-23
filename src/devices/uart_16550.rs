@@ -1,8 +1,8 @@
-use core::convert::TryInto;
+use core::convert::TryInto;	//一种试图消耗自我的转换，它可能昂贵也可能不昂贵。库作者通常不应该直接实现这个特性，而应该更倾向于实现TryFrom trait，它提供了更大的灵活性，并免费提供了等价的尝试实现，这得益于标准库中的全面实现。有关这方面的更多信息，请参阅Into的文档。
 
 use crate::syscall::io::{Io, Mmio, Pio, ReadOnly};
-
-bitflags! {
+//将位操作和rust的类型系统绑定起来，抽象封装成一个个类型和有意义的名字， 将映设关系固化下来，并且自动完成转化！从而增强语义和表达力，这样会很好用且容易排查错误！
+bitflags! {	//Crate [bitflags](https://docs.rs/bitflags/1.2.1/bitflags/) 此Rust Crate可以将一个struct转化为一个bit flags set, 自动完成映设和转化， 此处代码例子出自它的文档， 若要深入了解可去详细阅读之。
     /// Interrupt enable flags
     struct IntEnFlags: u8 {
         const RECEIVED = 1;
@@ -23,8 +23,8 @@ bitflags! {
     }
 }
 
-#[allow(dead_code)]
-#[repr(packed)]
+#[allow(dead_code)]	//抑制 `dead_code` lint
+#[repr(packed)]	//在某种程度上打包字段，忽略对齐
 pub struct SerialPort<T: Io> {
     /// Data register, read to receive, write to send
     data: T,
@@ -83,13 +83,13 @@ where
     fn line_sts(&self) -> LineStsFlags {
         LineStsFlags::from_bits_truncate(
             (unsafe { self.line_sts.read() } & 0xFF.into())
-                .try_into()
-                .unwrap_or(0),
+                .try_into()	//执行转换
+                .unwrap_or(0),	//返回包含的某个值或提供的默认值。传递给unwrap_or的参数被急切地求值;如果传递函数调用的结果，建议使用unwrap_or_else，它是惰性计算的。
         )
     }
 
     pub fn receive(&mut self) -> Option<u8> {
-        if self.line_sts().contains(LineStsFlags::INPUT_FULL) {
+        if self.line_sts().contains(LineStsFlags::INPUT_FULL) {	//如果结果是包含给定值的Ok值，则返回true。
             Some(
                 (unsafe { self.data.read() } & 0xFF.into())
                     .try_into()
