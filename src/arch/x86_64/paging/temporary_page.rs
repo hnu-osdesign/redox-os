@@ -22,7 +22,8 @@ impl TemporaryPage {
 
     /// Maps the temporary page to the given frame in the active table.
     /// Returns the start address of the temporary page.
-    //页映射到帧
+    /// 将临时页映射到活动表中
+    //页映射到帧，返回临时页的起始地址
     pub fn map(&mut self, frame: Frame, flags: EntryFlags, active_table: &mut ActivePageTable) -> VirtualAddress {
         assert!(active_table.translate_page(self.page).is_none(), "temporary page is already mapped");
         let result = active_table.map_to(self.page, frame, flags);//建立page和frame的映射关系

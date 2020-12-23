@@ -130,6 +130,7 @@ impl Mapper {
     }
 
     /// Identity map a frame
+    /// 该函数定义是为了重新映射内核
     pub fn identity_map(&mut self, frame: Frame, flags: EntryFlags) -> MapperFlush {
         let page = Page::containing_address(VirtualAddress::new(frame.start_address().get()));
         self.map_to(page, frame, flags)
