@@ -3,7 +3,7 @@ use core::convert::TryInto;	//一种试图消耗自我的转换，它可能昂�
 use crate::syscall::io::{Io, Mmio, Pio, ReadOnly};
 //将位操作和rust的类型系统绑定起来，抽象封装成一个个类型和有意义的名字， 将映设关系固化下来，并且自动完成转化！从而增强语义和表达力，这样会很好用且容易排查错误！
 bitflags! {	//Crate [bitflags](https://docs.rs/bitflags/1.2.1/bitflags/) 此Rust Crate可以将一个struct转化为一个bit flags set, 自动完成映设和转化， 此处代码例子出自它的文档， 若要深入了解可去详细阅读之。
-    // Interrupt enable flags
+    /// Interrupt enable flags
     struct IntEnFlags: u8 {
         const RECEIVED = 1;
         const SENT = 1 << 1;
