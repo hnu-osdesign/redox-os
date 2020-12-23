@@ -409,7 +409,7 @@ impl ActivePageTable {
             locked: false,
         }
     }
-
+    //切换页表 ，重新加载CR3寄存器中的地址
     pub fn switch(&mut self, new_table: InactivePageTable) -> InactivePageTable {
         let old_table = InactivePageTable {
             p4_frame: Frame::containing_address(PhysicalAddress::new(
