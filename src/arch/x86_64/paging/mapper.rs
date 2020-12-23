@@ -108,15 +108,15 @@ impl Mapper {
             page.start_address().get(),
             p1[page.p1_index()].address().get(), p1[page.p1_index()].flags(),
             frame.start_address().get(), flags);
-        p1.increment_entry_count();
-        p1[page.p1_index()].set(frame, flags | EntryFlags::PRESENT);
+        p1.increment_entry_count();//增加页表条目数量
+        p1[page.p1_index()].set(frame, flags | EntryFlags::PRESENT);//设置present位，不设置对于映射页面没有意义
         MapperFlush::new(page)
     }
 
     /// Map a page to the next free frame
     pub fn map(&mut self, page: Page, flags: EntryFlags) -> MapperFlush {
-        let frame = allocate_frames(1).expect("out of frames");
-        self.map_to(page, frame, flags)
+        let frame = allocate_frames(1).expect("out of frames");//分配一个空闲帧
+        self.map_to(page, frame, flags)//为page和frame建立映射关系
     }
 
     /// Update flags for a page
